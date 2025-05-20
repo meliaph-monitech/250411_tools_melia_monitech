@@ -1,7 +1,12 @@
 import streamlit as st
 import json
 import os
+import time
 from filelock import FileLock
+from streamlit_autorefresh import st_autorefresh
+
+# Refresh the app every 5 seconds
+st_autorefresh(interval=5000, key="auto_refresh")
 
 # Configuration
 NAMES = [
@@ -49,13 +54,13 @@ def main():
         col = cols[i % 4]
         status = state[name]
         btn_label = f"✅ {name}" if status else f"❌ {name}"
-        btn_color = "green" if status else "red"
 
+        # Button click
         if col.button(btn_label, key=name):
             toggle_status(name)
-            st.rerun()  # Force rerun to refresh state for all users
+            st.rerun()  # Rerun immediately after click
 
-    st.info("Click on your name to toggle your attendance status.")
+    st.info("Click on your name to toggle your attendance. Auto-refresh runs every 5 seconds.")
 
 if __name__ == "__main__":
     main()
