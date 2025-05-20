@@ -1,4 +1,6 @@
 import streamlit as st
+st.set_page_config(page_title="Team Attendance", layout="wide")  # MUST be first Streamlit command
+
 import json
 import os
 import time
@@ -43,7 +45,6 @@ def toggle_status(name):
 
 # Run the app
 def main():
-    st.set_page_config(page_title="Team Attendance", layout="wide")
     st.title("👥 Team Attendance Tracker")
 
     init_state()
