@@ -1,62 +1,73 @@
 import streamlit as st
 
-# Page setup
-st.set_page_config(page_title="Team Attendance", layout="centered")
-st.title("🔆 Team Attendance Tracker")
+# Set page config
+st.set_page_config(page_title="Attendance Display", layout="wide")
 
-# Team members
-team_members = [
-    "Alice", "Bob", "Charlie", "Diana", "Ethan",
-    "Fiona", "George", "Hannah", "Ivy", "Jack"
+# Define the names for the 12 people
+names = [
+    "Alice", "Bob", "Charlie", "Diana",
+    "Eve", "Frank", "Grace", "Hank",
+    "Ivy", "Jack", "Kathy", "Leo"
 ]
 
-# Session state for attendance
-for member in team_members:
-    if f"{member}_state" not in st.session_state:
-        st.session_state[f"{member}_state"] = False  # OFF by default
+# Initialize session state to track the status of each person
+if "statuses" not in st.session_state:
+    st.session_state.statuses = [False] * len(names)
 
-# Neon style
-st.markdown("""
+# CSS for neon button styling
+st.markdown(
+    """
     <style>
-    .neon-on {
-        background-color: #39ff14;
-        color: black;
-        font-weight: bold;
-        border-radius: 10px;
-        padding: 10px 20px;
-        text-align: center;
-        box-shadow: 0 0 10px #39ff14, 0 0 20px #39ff14, 0 0 30px #39ff14;
-        margin-bottom: 10px;
+    .grid-container {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        padding: 20px;
     }
-    .neon-off {
-        background-color: #222;
+    .neon-button {
+        font-size: 20px;
+        font-weight: bold;
         color: white;
-        border: 1px solid #444;
-        border-radius: 10px;
-        padding: 10px 20px;
         text-align: center;
-        margin-bottom: 10px;
+        padding: 15px;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s ease-in-out;
+    }
+    .neon-button.off {
+        background: #444;
+        box-shadow: none;
+    }
+    .neon-button.on {
+        background: #00ff00;
+        box-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00, 0 0 30px #00ff00;
     }
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
 
-# Layout in two columns
-cols = st.columns(2)
+# Display the grid of buttons
+st.markdown('<div class="grid-container">', unsafe_allow_html=True)
 
-for idx, member in enumerate(team_members):
-    col = cols[idx % 2]
+for idx, name in enumerate(names):
+    # Determine the button class based on the status
+    button_class = "neon-button on" if st.session_state.statuses[idx] else "neon-button off"
 
-    with col:
-        # Define state key
-        state_key = f"{member}_state"
-        click_key = f"{member}_click"
+    # Create a button with the neon effect
+    if st.button(name, key=f"btn_{idx}", help=f"Toggle {name}"):
+        # Toggle the status
+        st.session_state.statuses[idx] = not st.session_state.statuses[idx]
 
-        # Button that triggers a state change
-        if st.button(f"{'✅' if st.session_state[state_key] else '❌'} {member}", key=click_key):
-            st.session_state[state_key] = not st.session_state[state_key]
+    # Add the button with dynamic classes
+    st.markdown(
+        f"""
+        <button class="{button_class}" onclick="document.querySelector('[data-testid=btn_{idx}]').click()">
+            {name}
+        </button>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        # Show neon-style status
-        if st.session_state[state_key]:
-            st.markdown(f'<div class="neon-on">{member} is ON</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="neon-off">{member} is OFF</div>', unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
