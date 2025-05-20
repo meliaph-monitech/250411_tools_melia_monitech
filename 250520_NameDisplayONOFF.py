@@ -50,7 +50,8 @@ def main():
     init_state()
     state = load_state()
 
-    cols = st.columns(4)
+    # cols = st.columns(4)
+    cols = st.columns([3,3,3,3])
     for i, name in enumerate(NAMES):
         col = cols[i % 4]
         status = state[name]
