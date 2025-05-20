@@ -1,6 +1,6 @@
 import streamlit as st
 
-# Set page config
+# Page setup
 st.set_page_config(page_title="Team Attendance", layout="centered")
 st.title("🔆 Team Attendance Tracker")
 
@@ -10,12 +10,12 @@ team_members = [
     "Fiona", "George", "Hannah", "Ivy", "Jack"
 ]
 
-# Initialize states
+# Session state for attendance
 for member in team_members:
-    if member not in st.session_state:
-        st.session_state[member] = False
+    if f"{member}_state" not in st.session_state:
+        st.session_state[f"{member}_state"] = False  # OFF by default
 
-# Neon-style CSS
+# Neon style
 st.markdown("""
     <style>
     .neon-on {
@@ -40,22 +40,23 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Layout
+# Layout in two columns
 cols = st.columns(2)
 
 for idx, member in enumerate(team_members):
     col = cols[idx % 2]
+
     with col:
-        # Show the correct button label based on current state
-        current_state = st.session_state[member]
-        button_label = f"{'✅' if current_state else '❌'} {member}"
+        # Define state key
+        state_key = f"{member}_state"
+        click_key = f"{member}_click"
 
-        # Button click toggles state
-        if st.button(button_label, key=f"btn_{member}"):
-            st.session_state[member] = not current_state
-            current_state = not current_state  # Update immediately
+        # Button that triggers a state change
+        if st.button(f"{'✅' if st.session_state[state_key] else '❌'} {member}", key=click_key):
+            st.session_state[state_key] = not st.session_state[state_key]
 
-        # Show neon status
-        status_class = "neon-on" if current_state else "neon-off"
-        status_text = "ON" if current_state else "OFF"
-        st.markdown(f'<div class="{status_class}">{member} is {status_text}</div>', unsafe_allow_html=True)
+        # Show neon-style status
+        if st.session_state[state_key]:
+            st.markdown(f'<div class="neon-on">{member} is ON</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="neon-off">{member} is OFF</div>', unsafe_allow_html=True)
