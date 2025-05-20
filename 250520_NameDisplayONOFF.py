@@ -1,20 +1,20 @@
 import streamlit as st
 
-# Set page config
+# Set page configuration
 st.set_page_config(page_title="Attendance Display", layout="wide")
 
-# Define the names for the 12 people
+# Names for the 12 people
 names = [
     "Alice", "Bob", "Charlie", "Diana",
     "Eve", "Frank", "Grace", "Hank",
     "Ivy", "Jack", "Kathy", "Leo"
 ]
 
-# Initialize session state to track the status of each person
+# Initialize session state to track attendance (True = in the room, False = not in the room)
 if "statuses" not in st.session_state:
     st.session_state.statuses = [False] * len(names)
 
-# CSS for neon button styling
+# CSS for the neon button
 st.markdown(
     """
     <style>
@@ -51,19 +51,30 @@ st.markdown(
 # Display the grid of buttons
 st.markdown('<div class="grid-container">', unsafe_allow_html=True)
 
+# Create buttons for each name in the grid
 for idx, name in enumerate(names):
-    # Determine the button class based on the status
+    # Determine CSS class for the button based on attendance status
     button_class = "neon-button on" if st.session_state.statuses[idx] else "neon-button off"
 
-    # Create a button with the neon effect
-    if st.button(name, key=f"btn_{idx}", help=f"Toggle {name}"):
-        # Toggle the status
+    # Use a button to toggle the status
+    clicked = st.button(name, key=f"btn_{idx}")
+    
+    # If the button is clicked, toggle the status
+    if clicked:
         st.session_state.statuses[idx] = not st.session_state.statuses[idx]
 
-    # Add the button with dynamic classes
+    # Render the button with the appropriate class
     st.markdown(
         f"""
-        <button class="{button_class}" onclick="document.querySelector('[data-testid=btn_{idx}]').click()">
+        <style>
+        div[data-testid="stButton"] > button[data-testid="btn_{idx}"] {{
+            width: 100%;
+            height: 100%;
+            background: inherit;
+            color: inherit;
+        }}
+        </style>
+        <button class="{button_class}">
             {name}
         </button>
         """,
