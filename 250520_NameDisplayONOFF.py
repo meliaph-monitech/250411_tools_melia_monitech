@@ -1,84 +1,61 @@
 import streamlit as st
+import json
+import os
+from filelock import FileLock
 
-# Set page configuration
-st.set_page_config(page_title="Attendance Display", layout="wide")
-
-# Names for the 12 people
-names = [
-    "Alice", "Bob", "Charlie", "Diana",
-    "Eve", "Frank", "Grace", "Hank",
-    "Ivy", "Jack", "Kathy", "Leo"
+# Configuration
+NAMES = [
+    "Alice", "Bob", "Charlie", "David",
+    "Eve", "Faythe", "Grace", "Heidi",
+    "Ivan", "Judy", "Mallory", "Niaj"
 ]
+STATE_FILE = "attendance_state.json"
+LOCK_FILE = "attendance_state.lock"
 
-# Initialize session state to track attendance (True = in the room, False = not in the room)
-if "statuses" not in st.session_state:
-    st.session_state.statuses = [False] * len(names)
+# Initialize state if not exists
+def init_state():
+    if not os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "w") as f:
+            json.dump({name: False for name in NAMES}, f)
 
-# CSS for the neon button
-st.markdown(
-    """
-    <style>
-    .grid-container {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 10px;
-        padding: 20px;
-    }
-    .neon-button {
-        font-size: 20px;
-        font-weight: bold;
-        color: white;
-        text-align: center;
-        padding: 15px;
-        border: none;
-        border-radius: 10px;
-        cursor: pointer;
-        transition: all 0.3s ease-in-out;
-    }
-    .neon-button.off {
-        background: #444;
-        box-shadow: none;
-    }
-    .neon-button.on {
-        background: #00ff00;
-        box-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00, 0 0 30px #00ff00;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Load state from file
+def load_state():
+    with FileLock(LOCK_FILE):
+        with open(STATE_FILE, "r") as f:
+            return json.load(f)
 
-# Display the grid of buttons
-st.markdown('<div class="grid-container">', unsafe_allow_html=True)
+# Save state to file
+def save_state(state):
+    with FileLock(LOCK_FILE):
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f)
 
-# Create buttons for each name in the grid
-for idx, name in enumerate(names):
-    # Determine CSS class for the button based on attendance status
-    button_class = "neon-button on" if st.session_state.statuses[idx] else "neon-button off"
+# Toggle the status of a name
+def toggle_status(name):
+    state = load_state()
+    state[name] = not state[name]
+    save_state(state)
 
-    # Use a button to toggle the status
-    clicked = st.button(name, key=f"btn_{idx}")
-    
-    # If the button is clicked, toggle the status
-    if clicked:
-        st.session_state.statuses[idx] = not st.session_state.statuses[idx]
+# Run the app
+def main():
+    st.set_page_config(page_title="Team Attendance", layout="wide")
+    st.title("👥 Team Attendance Tracker")
 
-    # Render the button with the appropriate class
-    st.markdown(
-        f"""
-        <style>
-        div[data-testid="stButton"] > button[data-testid="btn_{idx}"] {{
-            width: 100%;
-            height: 100%;
-            background: inherit;
-            color: inherit;
-        }}
-        </style>
-        <button class="{button_class}">
-            {name}
-        </button>
-        """,
-        unsafe_allow_html=True,
-    )
+    init_state()
+    state = load_state()
 
-st.markdown("</div>", unsafe_allow_html=True)
+    cols = st.columns(4)
+    for i, name in enumerate(NAMES):
+        col = cols[i % 4]
+        status = state[name]
+        btn_label = f"✅ {name}" if status else f"❌ {name}"
+        btn_color = "green" if status else "red"
+
+        if col.button(btn_label, key=name):
+            toggle_status(name)
+            st.rerun()  # Force rerun to refresh state for all users
+
+    st.info("Click on your name to toggle your attendance status.")
+
+if __name__ == "__main__":
+    main()
