@@ -7,8 +7,8 @@ import time
 from filelock import FileLock
 from streamlit_autorefresh import st_autorefresh
 
-# Refresh the app every 5 seconds
-st_autorefresh(interval=5000, key="auto_refresh")
+# Refresh the app every 0.5 seconds
+st_autorefresh(interval=500, key="auto_refresh")
 
 # Configuration
 NAMES = [
