@@ -61,7 +61,7 @@ def main():
             toggle_status(name)
             st.rerun()  # Rerun immediately after click
 
-    st.info("Click on your name to toggle your attendance. Auto-refresh runs every 5 seconds.")
+    st.info("Click on your name to toggle your attendance.")
 
 if __name__ == "__main__":
     main()
