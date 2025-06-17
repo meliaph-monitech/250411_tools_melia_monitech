@@ -70,24 +70,9 @@ Please extract:
    - English word (or romanized Korean)
    - Korean translation
    - A simple English definition
-   - A simple Korean definition
+   - Simple definition in Korean
 
-Respond in this exact JSON format:
-{{
-  "title_en": "cleaned title in English",
-  "title_ko": "translated title in Korean",
-  "description_en": "brief English description",
-  "description_ko": "brief Korean description",
-  "vocabulary": [
-    {{
-      "word": "...",
-      "korean": "...",
-      "definition_en": "...",
-      "definition_ko": "..."
-    }},
-    ...
-  ]
-}}
+Write the answer in clearly labeled plain text sections, not in JSON.
 
 Filename: {file_name}
 """
