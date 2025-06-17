@@ -30,52 +30,52 @@ def extract_pdfs(zip_file):
         pdf_info.append({"file_name": f, "page_count": pages})
     return sorted(pdf_info, key=lambda x: x["file_name"]), non_pdf_files, temp_dir
 
-# def build_prompt(file_name):
-#     return f"""
-# You are a smart document assistant.
-
-# The following string is a PDF file name that may include tags that mostly written inside "[ ]", publication dates, unnecessary symbols, or extra metadata.
-
-# Please extract:
-# 1. A clean, human-readable **title** of the paper.
-# 2. Detect the language of the title (Korean or English).
-# 3. Translate the title into the opposite language (Korean ↔ English).
-# 4. Give a summary of what the document might be about and add glossary of technical terms that appeared in the title.
-
-# Respond in this exact JSON format:
-# {{
-#   "title_en": "cleaned title in English",
-#   "title_ko": "translated title in Korean",
-#   "description_en": "brief English description",
-#   "description_ko": "brief Korean description"
-# }}
-
-# Filename: {file_name}
-# """
-
-
-##### but only include terms that are technical, uncommon, or context-specific — skip generic or well-known words
 def build_prompt(file_name):
     return f"""
 You are a smart document assistant.
 
-The following string is a PDF file name that may include tags (like [학회논문]), publication dates, or extra metadata.
+The following string is a PDF file name that may include tags that mostly written inside "[ ]", publication dates, unnecessary symbols, or extra metadata.
 
 Please extract:
-1. A clean, human-readable title of the paper.
+1. A clean, human-readable **title** of the paper.
 2. Detect the language of the title (Korean or English).
 3. Translate the title into the opposite language (Korean ↔ English).
-4. Provide a summary of what the document might be about.
-5. Break down the final assumed title word-by-word as a vocabulary list. For each word, include: 
-   - English word (or romanized Korean)
-   - Korean translation
-   - A simple English definition
-   - Simple definition in Korean
+4. Give a summary of what the document might be about and add glossary of technical terms that appeared in the title.
 
-Write the answer in clearly labeled plain text sections, not in JSON.
+Respond in this exact JSON format:
+{{
+  "title_en": "cleaned title in English",
+  "title_ko": "translated title in Korean",
+  "description_en": "brief English description",
+  "description_ko": "brief Korean description"
+}}
 
 Filename: {file_name}
 """
+
+
+# ##### but only include terms that are technical, uncommon, or context-specific — skip generic or well-known words
+# def build_prompt(file_name):
+#     return f"""
+# You are a smart document assistant.
+
+# The following string is a PDF file name that may include tags (like [학회논문]), publication dates, or extra metadata.
+
+# Please extract:
+# 1. A clean, human-readable title of the paper.
+# 2. Detect the language of the title (Korean or English).
+# 3. Translate the title into the opposite language (Korean ↔ English).
+# 4. Provide a summary of what the document might be about.
+# 5. Break down the final assumed title word-by-word as a vocabulary list. For each word, include: 
+#    - English word (or romanized Korean)
+#    - Korean translation
+#    - A simple English definition
+#    - Simple definition in Korean
+
+# Write the answer in clearly labeled plain text sections, not in JSON.
+
+# Filename: {file_name}
+# """
 
 
 def ask_llm(prompt):
