@@ -2,3 +2,6 @@ streamlit
 Pillow
 filelock
 streamlit-autorefresh
+openai
+pymupdf
+pandas
