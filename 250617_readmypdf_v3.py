@@ -7,37 +7,10 @@ import requests
 import pandas as pd
 import json
 
-# OpenRouter (DeepSeek) API setup
+# OpenRouter (DeepSeek) API
 OPENROUTER_API_KEY = st.secrets["openrouter"]["api_key"]
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "deepseek-ai/deepseek-coder-v3-32k"
-
-# LibreTranslate
-TRANSLATE_URL = "https://libretranslate.de/translate"
-
-def translate_to_korean(text):
-    try:
-        response = requests.post(TRANSLATE_URL, json={
-            "q": text,
-            "source": "en",
-            "target": "ko",
-            "format": "text"
-        })
-        return response.json()["translatedText"]
-    except:
-        return "⚠️ Translation failed"
-
-def translate_to_english(text):
-    try:
-        response = requests.post(TRANSLATE_URL, json={
-            "q": text,
-            "source": "ko",
-            "target": "en",
-            "format": "text"
-        })
-        return response.json()["translatedText"]
-    except:
-        return "⚠️ Translation failed"
+MODEL = "deepseek/deepseek-chat-v3-0324:free"
 
 def extract_pdfs(zip_file):
     temp_dir = tempfile.TemporaryDirectory()
@@ -59,16 +32,22 @@ def extract_pdfs(zip_file):
 
 def build_prompt(file_name):
     return f"""
-You are a helpful assistant.
+You are a smart document assistant.
 
-Given a raw filename, do the following:
-1. Guess a clean, human-readable title.
-2. Guess briefly what the document is about based only on the file name.
+The following string is a PDF file name that may include tags like [한학논문], publication dates, or extra metadata.
 
-Respond only in this exact JSON format:
+Please extract:
+1. A clean, human-readable **title** of the paper.
+2. Detect the language of the title (Korean or English).
+3. Translate the title into the opposite language (Korean ↔ English).
+4. Give a brief summary of what the document might be about.
+
+Respond in this exact JSON format:
 {{
-  "title": "cleaned readable title",
-  "brief_description": "summary in English or Korean depending on title language"
+  "title_en": "cleaned title in English",
+  "title_ko": "translated title in Korean",
+  "description_en": "brief English description",
+  "description_ko": "brief Korean description"
 }}
 
 Filename: {file_name}
@@ -76,24 +55,22 @@ Filename: {file_name}
 
 def ask_llm(prompt):
     headers = {
-        "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
     }
-
     payload = {
-        "model": "deepseek/deepseek-chat-v3-0324:free",
+        "model": MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
         "max_tokens": 512
     }
-
-    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+    response = requests.post(OPENROUTER_URL, headers=headers, json=payload)
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
 # Streamlit UI
 st.set_page_config(page_title="PDF Filename Explainer", layout="centered")
-st.sidebar.title("📦 Upload ZIP with PDFs")
+st.sidebar.title("📆 Upload ZIP with PDFs")
 uploaded_zip = st.sidebar.file_uploader("Upload a ZIP file", type="zip")
 
 if uploaded_zip:
@@ -112,44 +89,20 @@ if uploaded_zip:
             prompt = build_prompt(file_name)
             st.code(prompt.strip(), language="text")
             if st.button("Explain this file name", key=f"explain_{file_name}"):
-                with st.spinner("🔍 Analyzing with DeepSeek via OpenRouter..."):
+                with st.spinner("🔍 Analyzing with DeepSeek..."):
                     try:
                         output = ask_llm(prompt)
-                        # parsed = json.loads(output)
-                        try:
-                            cleaned = output.strip().strip("```json").strip("```").strip()
-                            parsed = json.loads(cleaned)
-                        except Exception:
-                            st.error("❌ Failed to parse JSON from LLM.")
-                            st.text(output)
-                            raise
-
+                        cleaned = output.strip().strip("```json").strip("```").strip()
+                        parsed = json.loads(cleaned)
                         pages = next((p["page_count"] for p in pdf_info if p["file_name"] == file_name), "N/A")
-
-                        title = parsed["title"]
-                        description = parsed["brief_description"]
-
-                        if not title.strip():
-                            raise ValueError("Empty title returned from LLM")
-
-                        if title.isascii():
-                            title_en = title
-                            desc_en = description
-                            title_ko = translate_to_korean(title_en)
-                            desc_ko = translate_to_korean(desc_en)
-                        else:
-                            title_ko = title
-                            desc_ko = description
-                            title_en = translate_to_english(title_ko)
-                            desc_en = translate_to_english(desc_ko)
 
                         row = {
                             "Original File Name": file_name,
                             "Pages": pages,
-                            "English Title": title_en or "(N/A)",
-                            "Korean Title": title_ko,
-                            "Description (EN)": desc_en or "(N/A)",
-                            "Description (KO)": desc_ko
+                            "English Title": parsed.get("title_en", "-"),
+                            "Korean Title": parsed.get("title_ko", "-"),
+                            "Description (EN)": parsed.get("description_en", "-"),
+                            "Description (KO)": parsed.get("description_ko", "-")
                         }
                         results.append(row)
 
@@ -170,5 +123,5 @@ if uploaded_zip:
                         st.error("❌ Unexpected error.")
                         st.exception(e)
     if results:
-        st.markdown("### 🧾 All Processed Results")
+        st.markdown("### 📜 All Processed Results")
         st.dataframe(pd.DataFrame(results))
