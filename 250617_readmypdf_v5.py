@@ -27,7 +27,7 @@ def extract_pdfs(zip_file):
             doc.close()
         except:
             pages = "Unreadable"
-        pdf_info.append({"file_name": f, "page_count": pages})
+        pdf_info.append({"file_name": f, "page_count": pages, "path": os.path.join(temp_dir.name, f)})
     return sorted(pdf_info, key=lambda x: x["file_name"]), non_pdf_files, temp_dir
 
 def build_prompt(file_name):
@@ -52,31 +52,6 @@ Respond in this exact JSON format:
 
 Filename: {file_name}
 """
-
-
-# ##### but only include terms that are technical, uncommon, or context-specific — skip generic or well-known words
-# def build_prompt(file_name):
-#     return f"""
-# You are a smart document assistant.
-
-# The following string is a PDF file name that may include tags (like [학회논문]), publication dates, or extra metadata.
-
-# Please extract:
-# 1. A clean, human-readable title of the paper.
-# 2. Detect the language of the title (Korean or English).
-# 3. Translate the title into the opposite language (Korean ↔ English).
-# 4. Provide a summary of what the document might be about.
-# 5. Break down the final assumed title word-by-word as a vocabulary list. For each word, include: 
-#    - English word (or romanized Korean)
-#    - Korean translation
-#    - A simple English definition
-#    - Simple definition in Korean
-
-# Write the answer in clearly labeled plain text sections, not in JSON.
-
-# Filename: {file_name}
-# """
-
 
 def ask_llm(prompt):
     headers = {
@@ -109,16 +84,15 @@ if uploaded_zip:
 
     if selected_file:
         prompt = build_prompt(selected_file)
-        # with st.expander(f"📄 {selected_file}"):
-        #     st.caption("Prompt sent to LLM (hidden by default):")
-        #     st.code(prompt.strip(), language="text")
 
-        with st.spinner("🔍 Analyzing with DeepSeek..."):
+        with st.spinner("🔍 Analyzing filename with DeepSeek..."):
             try:
                 output = ask_llm(prompt)
                 cleaned = output.strip().strip("```json").strip("```").strip()
                 parsed = json.loads(cleaned)
-                pages = next((p["page_count"] for p in pdf_info if p["file_name"] == selected_file), "N/A")
+                selected_meta = next((p for p in pdf_info if p["file_name"] == selected_file), {})
+                pages = selected_meta.get("page_count", "N/A")
+                pdf_path = selected_meta.get("path")
 
                 row = {
                     "Original File Name": selected_file,
@@ -138,7 +112,43 @@ if uploaded_zip:
 **📘 Description (EN)**: {row['Description (EN)']}  
 **📙 Description (KO)**: {row['Description (KO)']}
 """)
-                st.success("✅ Parsed and translated successfully.")
+                st.success("✅ Filename parsed and translated successfully.")
+
+                if isinstance(pages, int):
+                    st.subheader("📄 Page-based Text Analysis")
+                    selected_page = st.number_input("Select page number to analyze:", min_value=1, max_value=pages, step=1)
+
+                    if st.button("Analyze selected page"):
+                        try:
+                            doc = fitz.open(pdf_path)
+                            page_text = doc.load_page(selected_page - 1).get_text()
+                            doc.close()
+
+                            st.text_area("Extracted text from selected page:", page_text, height=200)
+
+                            prompt_option = st.selectbox("Choose a task for this page:", [
+                                "Translate to the opposite language (KR ↔ EN)",
+                                "Summarize in both English and Korean",
+                                "Extract technical terms",
+                                "Freeform prompt"
+                            ])
+
+                            if prompt_option == "Freeform prompt":
+                                user_prompt = st.text_area("Enter your own prompt:")
+                            else:
+                                user_prompt = f"{prompt_option}:
+{page_text}"
+
+                            if user_prompt.strip():
+                                with st.spinner("🧠 Sending selected page to LLM..."):
+                                    result = ask_llm(user_prompt)
+                                    st.markdown("### 🧾 LLM Output:")
+                                    st.write(result)
+
+                        except Exception as e:
+                            st.error("❌ Error during page extraction or LLM call.")
+                            st.exception(e)
+
             except json.JSONDecodeError:
                 st.error("❌ LLM did not return valid JSON.")
                 st.text(output)
