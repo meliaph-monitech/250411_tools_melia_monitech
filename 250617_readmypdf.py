@@ -75,11 +75,18 @@ if uploaded_zip:
             if st.button(f"Explain this file name", key=f"explain_{file_name}"):
                 with st.spinner("🔍 Analyzing with GPT..."):
                     try:
-                        response = openai.ChatCompletion.create(
+                        response = openai.chat.completions.create(
                             model="gpt-3.5-turbo",
-                            messages=[{"role": "user", "content": prompt}]
+                            messages=[{"role": "user", "content": prompt}],
                         )
-                        parsed = json.loads(response["choices"][0]["message"]["content"])
+                        
+                        parsed = json.loads(response.choices[0].message.content)
+
+                        # response = openai.ChatCompletion.create(
+                        #     model="gpt-3.5-turbo",
+                        #     messages=[{"role": "user", "content": prompt}]
+                        # )
+                        # parsed = json.loads(response["choices"][0]["message"]["content"])
 
                         row = {
                             "Original File Name": file_name,
