@@ -40,7 +40,7 @@ Please extract:
 1. A clean, human-readable **title** of the paper.
 2. Detect the language of the title (Korean or English).
 3. Translate the title into the opposite language (Korean ↔ English).
-4. Give a brief summary of what the document might be about.
+4. Give a summary of what the document might be about and add glossary of technical terms that appeared in the title.
 
 Respond in this exact JSON format:
 {{
