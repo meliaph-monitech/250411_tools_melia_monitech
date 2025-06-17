@@ -7,12 +7,12 @@ import requests
 import pandas as pd
 import json
 
-# Together.ai API setup
-TOGETHER_API_KEY = st.secrets["together"]["api_key"]
-TOGETHER_URL = "https://api.together.xyz/v1/chat/completions"
-MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+# OpenRouter (DeepSeek) API setup
+OPENROUTER_API_KEY = st.secrets["openrouter"]["api_key"]
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MODEL = "deepseek-ai/deepseek-coder-v3-32k"
 
-# LibreTranslate public endpoint
+# LibreTranslate
 TRANSLATE_URL = "https://libretranslate.de/translate"
 
 def translate_to_korean(text):
@@ -74,9 +74,10 @@ Respond only in this exact JSON format:
 Filename: {file_name}
 """
 
-def ask_together(prompt):
+def ask_llm(prompt):
     headers = {
-        "Authorization": f"Bearer {TOGETHER_API_KEY}",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "HTTP-Referer": "https://your-app-name.streamlit.app",  # replace with your deployed Streamlit app URL
         "Content-Type": "application/json"
     }
     payload = {
@@ -85,7 +86,7 @@ def ask_together(prompt):
         "temperature": 0.7,
         "max_tokens": 512
     }
-    response = requests.post("https://api.together.xyz/v1/chat/completions", headers=headers, json=payload)
+    response = requests.post(OPENROUTER_URL, headers=headers, json=payload)
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
@@ -110,16 +111,18 @@ if uploaded_zip:
             prompt = build_prompt(file_name)
             st.code(prompt.strip(), language="text")
             if st.button("Explain this file name", key=f"explain_{file_name}"):
-                with st.spinner("🔍 Analyzing with Together.ai..."):
+                with st.spinner("🔍 Analyzing with DeepSeek via OpenRouter..."):
                     try:
-                        output = ask_together(prompt)
+                        output = ask_llm(prompt)
                         parsed = json.loads(output)
                         pages = next((p["page_count"] for p in pdf_info if p["file_name"] == file_name), "N/A")
 
                         title = parsed["title"]
                         description = parsed["brief_description"]
 
-                        # Detect language by checking ASCII
+                        if not title.strip():
+                            raise ValueError("Empty title returned from LLM")
+
                         if title.isascii():
                             title_en = title
                             desc_en = description
@@ -134,16 +137,16 @@ if uploaded_zip:
                         row = {
                             "Original File Name": file_name,
                             "Pages": pages,
-                            "English Title": title_en,
+                            "English Title": title_en or "(N/A)",
                             "Korean Title": title_ko,
-                            "Description (EN)": desc_en,
+                            "Description (EN)": desc_en or "(N/A)",
                             "Description (KO)": desc_ko
                         }
                         results.append(row)
 
                         st.markdown(f"""
-**Original File Name**: `{row['Original File Name']}`  
-**Pages**: {row['Pages']}  
+**Original File Name**: `{file_name}`  
+**Pages**: {pages}  
 **English Title**: *{row['English Title']}*  
 **Korean Title**: *{row['Korean Title']}*  
 
