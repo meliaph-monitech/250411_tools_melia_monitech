@@ -145,7 +145,8 @@ if uploaded_zip:
         if prompt_option == "Freeform prompt":
             user_prompt = st.text_area("Enter your own prompt:", key="custom_prompt")
         else:
-            user_prompt = f"{prompt_option}: {st.session_state.page_text}"
+            user_prompt = f"{prompt_option}:
+{st.session_state.page_text}"
 
         if st.button("Run LLM Analysis") and user_prompt.strip():
             with st.spinner("🧠 Sending selected page to LLM..."):
@@ -159,7 +160,10 @@ if uploaded_zip:
 
     # Reset filename analysis when changing file
     if st.session_state.get("_selected_file") != selected_file:
-        st.session_state.filename_result = None
-        st.session_state.page_text = ""
-        st.session_state.page_from = None
         st.session_state._selected_file = selected_file
+        if "filename_result" in st.session_state:
+            del st.session_state["filename_result"]
+        if "page_text" in st.session_state:
+            del st.session_state["page_text"]
+        if "page_from" in st.session_state:
+            del st.session_state["page_from"]
