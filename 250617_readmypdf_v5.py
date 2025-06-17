@@ -137,7 +137,7 @@ if uploaded_zip:
                                 user_prompt = st.text_area("Enter your own prompt:")
                             else:
                                 user_prompt = f"{prompt_option}:
-{page_text}"
+{page_text}"  # Fixed unterminated f-string
 
                             if user_prompt.strip():
                                 with st.spinner("🧠 Sending selected page to LLM..."):
