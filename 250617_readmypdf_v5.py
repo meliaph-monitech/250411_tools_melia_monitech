@@ -145,8 +145,7 @@ if uploaded_zip:
         if prompt_option == "Freeform prompt":
             user_prompt = st.text_area("Enter your own prompt:", key="custom_prompt")
         else:
-            user_prompt = f"{prompt_option}:
-" + st.session_state.page_text
+            user_prompt = f"{prompt_option}:" + st.session_state.page_text
 
         if st.button("Run LLM Analysis") and user_prompt.strip():
             with st.spinner("🧠 Sending selected page to LLM..."):
