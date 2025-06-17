@@ -84,9 +84,9 @@ if uploaded_zip:
 
     if selected_file:
         prompt = build_prompt(selected_file)
-        with st.expander(f"📄 {selected_file}"):
-            st.caption("Prompt sent to LLM (hidden by default):")
-            st.code(prompt.strip(), language="text")
+        # with st.expander(f"📄 {selected_file}"):
+        #     st.caption("Prompt sent to LLM (hidden by default):")
+        #     st.code(prompt.strip(), language="text")
 
         with st.spinner("🔍 Analyzing with DeepSeek..."):
             try:
