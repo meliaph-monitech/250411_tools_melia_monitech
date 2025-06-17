@@ -32,19 +32,24 @@ def extract_pdfs(zip_file):
 
 def build_prompt(file_name):
     return f"""
-Given a file name: {file_name}
+You are a helpful assistant.
 
+Given a raw filename, do the following:
 1. Guess a clean, human-readable title.
-2. Detect the language (English or Korean) and translate it to the other.
-3. Guess briefly what this document might be about.
+2. Detect if it's in English or Korean.
+3. Translate it to the opposite language.
+4. Guess what the document is about based only on the file name.
 
-Respond in JSON format:
+Respond only in this exact JSON format:
 {{
-  "title": "...",
-  "translated_title": "...",
-  "brief_description": "..."
+  "title": "cleaned readable title",
+  "translated_title": "translation of the title",
+  "brief_description": "1-2 sentence guess of the content"
 }}
+
+Filename: {file_name}
 """
+
 
 def ask_together(prompt):
     headers = {
