@@ -68,7 +68,7 @@ Given a raw filename, do the following:
 Respond only in this exact JSON format:
 {{
   "title": "cleaned readable title",
-  "brief_description": "short summary in English or Korean depending on title language"
+  "brief_description": "summary in English or Korean depending on title language"
 }}
 
 Filename: {file_name}
