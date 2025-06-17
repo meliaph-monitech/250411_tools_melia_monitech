@@ -7,7 +7,7 @@ import requests
 import pandas as pd
 import json
 
-# Load Together.ai API key from Streamlit secrets
+# Together.ai API setup
 TOGETHER_API_KEY = st.secrets["together"]["api_key"]
 TOGETHER_URL = "https://api.together.xyz/v1/chat/completions"
 MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
@@ -85,6 +85,7 @@ if uploaded_zip:
                 with st.spinner("🔍 Analyzing with Together.ai..."):
                     try:
                         output = ask_together(prompt)
+                        st.code(output, language="json")
                         parsed = json.loads(output)
                         row = {
                             "Original File Name": file_name,
@@ -94,10 +95,13 @@ if uploaded_zip:
                             "Description": parsed["brief_description"]
                         }
                         results.append(row)
-                        st.success("✅ Response parsed successfully.")
+                        st.success("✅ Parsed successfully.")
                         st.dataframe(pd.DataFrame([row]))
+                    except json.JSONDecodeError:
+                        st.error("❌ LLM did not return valid JSON.")
+                        st.text(output)
                     except Exception as e:
-                        st.error("❌ Failed to process this filename.")
+                        st.error("❌ Unexpected error.")
                         st.exception(e)
     if results:
         st.markdown("### 🧾 All Processed Results")
