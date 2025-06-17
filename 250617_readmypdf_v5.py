@@ -134,10 +134,10 @@ if uploaded_zip:
                             ])
 
                             if prompt_option == "Freeform prompt":
-                                user_prompt = f"{prompt_option}:\n{page_text}"
+                                user_prompt = st.text_area("Enter your own prompt:")
                             else:
                                 user_prompt = f"{prompt_option}:
-{page_text}"  # Fixed unterminated f-string
+{page_text}"
 
                             if user_prompt.strip():
                                 with st.spinner("🧠 Sending selected page to LLM..."):
