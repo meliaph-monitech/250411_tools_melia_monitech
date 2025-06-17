@@ -38,18 +38,18 @@ Given a raw filename, do the following:
 1. Guess a clean, human-readable title.
 2. Detect if it's in English or Korean.
 3. Translate it to the opposite language.
-4. Guess what the document is about based only on the file name.
+4. Guess what the document is about based only on the file name, and provide the description in both English and Korean.
 
 Respond only in this exact JSON format:
 {{
   "title": "cleaned readable title",
-  "translated_title": "translation of the title",
-  "brief_description": "1-2 sentence guess of the content"
+  "translated_title": "translated version",
+  "brief_description_en": "short summary in English",
+  "brief_description_ko": "short summary in Korean"
 }}
 
 Filename: {file_name}
 """
-
 
 def ask_together(prompt):
     headers = {
@@ -90,26 +90,30 @@ if uploaded_zip:
                 with st.spinner("🔍 Analyzing with Together.ai..."):
                     try:
                         output = ask_together(prompt)
-                        st.code(output, language="json")
                         parsed = json.loads(output)
+                        pages = next((p["page_count"] for p in pdf_info if p["file_name"] == file_name), "N/A")
+
+                        # Always show both title versions
                         row = {
                             "Original File Name": file_name,
-                            "Pages": next((p["page_count"] for p in pdf_info if p["file_name"] == file_name), "N/A"),
+                            "Pages": pages,
                             "English Title": parsed["title"] if parsed["title"].isascii() else parsed["translated_title"],
                             "Korean Title": parsed["translated_title"] if not parsed["translated_title"].isascii() else parsed["title"],
-                            "Description": parsed["brief_description"]
+                            "Description (EN)": parsed.get("brief_description_en", ""),
+                            "Description (KO)": parsed.get("brief_description_ko", "")
                         }
                         results.append(row)
-                        st.success("✅ Parsed successfully.")
-                        # st.dataframe(pd.DataFrame([row]))
-                        st.markdown(f"""
-                        **Original File Name**: `{row['Original File Name']}`  
-                        **Pages**: {row['Pages']}  
-                        **English Title**: *{row['English Title']}*  
-                        **Korean Title**: *{row['Korean Title']}*  
-                        **Description**: {row['Description']}
-                        """)
 
+                        st.markdown(f"""
+**Original File Name**: `{row['Original File Name']}`  
+**Pages**: {row['Pages']}  
+**English Title**: *{row['English Title']}*  
+**Korean Title**: *{row['Korean Title']}*  
+
+**📘 Description (EN)**: {row['Description (EN)']}  
+**📙 Description (KO)**: {row['Description (KO)']}
+""")
+                        st.success("✅ Parsed successfully.")
                     except json.JSONDecodeError:
                         st.error("❌ LLM did not return valid JSON.")
                         st.text(output)
