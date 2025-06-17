@@ -7,20 +7,18 @@ import requests
 import pandas as pd
 import json
 
-# Load Together.ai API key from secrets
+# Load Together.ai API key from Streamlit secrets
 TOGETHER_API_KEY = st.secrets["together"]["api_key"]
-TOGETHER_URL = "https://api.together.xyz/v1/chat/completions"
-MODEL = "mistral-7b-instruct"  # or try "mixtral-8x7b-instruct"
+TOGETHER_URL = "https://api.together.xyz/inference"
+MODEL = "mistral-7b-instruct"
 
 def extract_pdfs(zip_file):
     temp_dir = tempfile.TemporaryDirectory()
     with zipfile.ZipFile(zip_file, 'r') as zip_ref:
         zip_ref.extractall(temp_dir.name)
-
     all_files = os.listdir(temp_dir.name)
     pdf_files = [f for f in all_files if f.lower().endswith(".pdf")]
     non_pdf_files = [f for f in all_files if not f.lower().endswith(".pdf")]
-
     pdf_info = []
     for f in pdf_files:
         try:
@@ -30,25 +28,21 @@ def extract_pdfs(zip_file):
         except:
             pages = "Unreadable"
         pdf_info.append({"file_name": f, "page_count": pages})
-
     return sorted(pdf_info, key=lambda x: x["file_name"]), non_pdf_files, temp_dir
 
 def build_prompt(file_name):
     return f"""
-You are a helpful assistant for organizing academic documents. Given a raw filename like this:
+Given a file name: {file_name}
 
-{file_name}
-
-Do the following:
 1. Guess a clean, human-readable title.
-2. Detect the language (English or Korean) and translate the title to the other.
-3. Guess briefly what the document might be about (1–2 sentences max).
+2. Detect the language (English or Korean) and translate it to the other.
+3. Guess briefly what this document might be about.
 
-Respond in this JSON format:
+Respond in JSON format:
 {{
-  "title": "<Guessed Title>",
-  "translated_title": "<Translated Title>",
-  "brief_description": "<Brief summary>"
+  "title": "...",
+  "translated_title": "...",
+  "brief_description": "..."
 }}
 """
 
@@ -57,17 +51,17 @@ def ask_together(prompt):
         "Authorization": f"Bearer {TOGETHER_API_KEY}",
         "Content-Type": "application/json"
     }
-
     payload = {
         "model": MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "prompt": prompt,
+        "max_tokens": 512,
         "temperature": 0.7,
-        "max_tokens": 512
+        "top_p": 0.9,
+        "stop": ["</s>"]
     }
-
     response = requests.post(TOGETHER_URL, headers=headers, json=payload)
     response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    return response.json()["output"]
 
 # Streamlit UI
 st.set_page_config(page_title="PDF Filename Explainer", layout="centered")
@@ -77,7 +71,6 @@ uploaded_zip = st.sidebar.file_uploader("Upload a ZIP file", type="zip")
 if uploaded_zip:
     pdf_info, non_pdf_files, temp_dir = extract_pdfs(uploaded_zip)
     raw_filenames = [pdf["file_name"] for pdf in pdf_info]
-
     st.success(f"✅ Found {len(raw_filenames)} PDF file(s).")
     if non_pdf_files:
         st.warning(f"⚠️ {len(non_pdf_files)} non-PDF file(s) detected. This app only supports PDFs.")
@@ -86,18 +79,15 @@ if uploaded_zip:
     selected_files = raw_filenames if select_all else st.multiselect("Select PDF files to analyze:", raw_filenames)
 
     results = []
-
     for file_name in selected_files:
         with st.expander(f"📄 {file_name}"):
             prompt = build_prompt(file_name)
             st.code(prompt.strip(), language="text")
-
             if st.button("Explain this file name", key=f"explain_{file_name}"):
                 with st.spinner("🔍 Analyzing with Together.ai..."):
                     try:
                         output = ask_together(prompt)
                         parsed = json.loads(output)
-
                         row = {
                             "Original File Name": file_name,
                             "Pages": next((p["page_count"] for p in pdf_info if p["file_name"] == file_name), "N/A"),
@@ -111,7 +101,6 @@ if uploaded_zip:
                     except Exception as e:
                         st.error("❌ Failed to process this filename.")
                         st.exception(e)
-
     if results:
         st.markdown("### 🧾 All Processed Results")
         st.dataframe(pd.DataFrame(results))
