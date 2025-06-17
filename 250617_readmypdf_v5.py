@@ -144,7 +144,7 @@ if uploaded_zip:
         task = st.selectbox("Choose a task:", [
             "Translate to the opposite language (KR ↔ EN)",
             "Summarize in both English and Korean",
-            "Extract technical terms and add bried description",
+            "Extract technical terms with short description (KR & EN)",
             "Freeform prompt"
         ])
 
