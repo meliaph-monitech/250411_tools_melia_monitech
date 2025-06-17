@@ -80,34 +80,32 @@ if uploaded_zip:
     if non_pdf_files:
         st.warning(f"⚠️ {len(non_pdf_files)} non-PDF file(s) detected. This app only supports PDFs.")
 
-    select_all = st.checkbox("Select all files")
-    selected_files = raw_filenames if select_all else st.multiselect("Select PDF files to analyze:", raw_filenames)
+    selected_file = st.selectbox("Select PDF file to analyze:", raw_filenames)
 
-    results = []
-    for file_name in selected_files:
-        with st.expander(f"📄 {file_name}"):
-            prompt = build_prompt(file_name)
+    if selected_file:
+        prompt = build_prompt(selected_file)
+        with st.expander(f"📄 {selected_file}"):
+            st.caption("Prompt sent to LLM (hidden by default):")
             st.code(prompt.strip(), language="text")
-            if st.button("Explain this file name", key=f"explain_{file_name}"):
-                with st.spinner("🔍 Analyzing with DeepSeek..."):
-                    try:
-                        output = ask_llm(prompt)
-                        cleaned = output.strip().strip("```json").strip("```").strip()
-                        parsed = json.loads(cleaned)
-                        pages = next((p["page_count"] for p in pdf_info if p["file_name"] == file_name), "N/A")
 
-                        row = {
-                            "Original File Name": file_name,
-                            "Pages": pages,
-                            "English Title": parsed.get("title_en", "-"),
-                            "Korean Title": parsed.get("title_ko", "-"),
-                            "Description (EN)": parsed.get("description_en", "-") + "\n",
-                            "Description (KO)": parsed.get("description_ko", "-")
-                        }
-                        results.append(row)
+        with st.spinner("🔍 Analyzing with DeepSeek..."):
+            try:
+                output = ask_llm(prompt)
+                cleaned = output.strip().strip("```json").strip("```").strip()
+                parsed = json.loads(cleaned)
+                pages = next((p["page_count"] for p in pdf_info if p["file_name"] == selected_file), "N/A")
 
-                        st.markdown(f"""
-**Original File Name**: `{file_name}`  
+                row = {
+                    "Original File Name": selected_file,
+                    "Pages": pages,
+                    "English Title": parsed.get("title_en", "-"),
+                    "Korean Title": parsed.get("title_ko", "-"),
+                    "Description (EN)": parsed.get("description_en", "-"),
+                    "Description (KO)": parsed.get("description_ko", "-")
+                }
+
+                st.markdown(f"""
+**Original File Name**: `{selected_file}`  
 **Pages**: {pages}  
 **English Title**: *{row['English Title']}*  
 **Korean Title**: *{row['Korean Title']}*  
@@ -115,13 +113,10 @@ if uploaded_zip:
 **📘 Description (EN)**: {row['Description (EN)']}  
 **📙 Description (KO)**: {row['Description (KO)']}
 """)
-                        st.success("✅ Parsed and translated successfully.")
-                    except json.JSONDecodeError:
-                        st.error("❌ LLM did not return valid JSON.")
-                        st.text(output)
-                    except Exception as e:
-                        st.error("❌ Unexpected error.")
-                        st.exception(e)
-    if results:
-        st.markdown("### 📜 All Processed Results")
-        st.dataframe(pd.DataFrame(results))
+                st.success("✅ Parsed and translated successfully.")
+            except json.JSONDecodeError:
+                st.error("❌ LLM did not return valid JSON.")
+                st.text(output)
+            except Exception as e:
+                st.error("❌ Unexpected error.")
+                st.exception(e)
