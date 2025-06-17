@@ -144,9 +144,9 @@ if uploaded_zip:
         task = st.selectbox("Choose a task:", [
             "Translate to the opposite language (KR ↔ EN)",
             "Summarize in both English and Korean",
-            "Extract technical terms with short description (KR & EN)",
+            "Extract technical terms",
             "Freeform prompt"
-        ])
+        ], key="task_selector")
 
         if task != "Freeform prompt":
             task_prompt = f"{task}:{st.session_state.page_text}"
@@ -156,7 +156,7 @@ if uploaded_zip:
             except Exception as e:
                 st.session_state.task_result = f"❌ Error: {str(e)}"
         else:
-            user_input = st.text_area("Enter your prompt:")
+            user_input = st.text_area("Enter your prompt:", key="custom_prompt")
             if st.button("Run LLM Analysis") and user_input.strip():
                 try:
                     result = ask_llm(user_input)
@@ -164,6 +164,6 @@ if uploaded_zip:
                 except Exception as e:
                     st.session_state.task_result = f"❌ Error: {str(e)}"
 
-        if st.session_state.task_result:
+        if st.session_state.get("task_result"):
             st.markdown("### 🧾 LLM Output:")
             st.write(st.session_state.task_result)
