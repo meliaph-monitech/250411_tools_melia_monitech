@@ -76,19 +76,22 @@ Filename: {file_name}
 
 def ask_llm(prompt):
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "https://your-app-name.streamlit.app",  # replace with your deployed Streamlit app URL
+        "Authorization": f"Bearer {st.secrets['openrouter']['api_key']}",
+        "HTTP-Referer": "https://your-app-name.streamlit.app",  # Replace with your actual Streamlit Cloud app URL
         "Content-Type": "application/json"
     }
+
     payload = {
-        "model": MODEL,
+        "model": "deepseek-ai/deepseek-llm-v1.5-chat",  # ✅ This is the correct OpenRouter-supported model
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
         "max_tokens": 512
     }
-    response = requests.post(OPENROUTER_URL, headers=headers, json=payload)
+
+    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
+
 
 # Streamlit UI
 st.set_page_config(page_title="PDF Filename Explainer", layout="centered")
