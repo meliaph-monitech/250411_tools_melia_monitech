@@ -7,10 +7,25 @@ import requests
 import pandas as pd
 import json
 
-# Together.ai API setup
+# Together.ai setup
 TOGETHER_API_KEY = st.secrets["together"]["api_key"]
 TOGETHER_URL = "https://api.together.xyz/v1/chat/completions"
 MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+
+# LibreTranslate setup (no key required for public endpoint)
+TRANSLATE_URL = "https://libretranslate.de/translate"
+
+def translate_to_korean(text):
+    try:
+        response = requests.post(TRANSLATE_URL, json={
+            "q": text,
+            "source": "en",
+            "target": "ko",
+            "format": "text"
+        })
+        return response.json()["translatedText"]
+    except:
+        return "⚠️ Translation failed"
 
 def extract_pdfs(zip_file):
     temp_dir = tempfile.TemporaryDirectory()
@@ -36,16 +51,12 @@ You are a helpful assistant.
 
 Given a raw filename, do the following:
 1. Guess a clean, human-readable title.
-2. Detect if it's in English or Korean.
-3. Translate it to the opposite language.
-4. Guess what the document is about based only on the file name, and provide the description in both English and Korean.
+2. Guess briefly what the document is about based only on the file name.
 
 Respond only in this exact JSON format:
 {{
   "title": "cleaned readable title",
-  "translated_title": "translated version",
-  "brief_description_en": "short summary in English",
-  "brief_description_ko": "short summary in Korean"
+  "brief_description": "short summary in English"
 }}
 
 Filename: {file_name}
@@ -62,7 +73,7 @@ def ask_together(prompt):
         "temperature": 0.7,
         "max_tokens": 512
     }
-    response = requests.post(TOGETHER_URL, headers=headers, json=payload)
+    response = requests.post("https://api.together.xyz/v1/chat/completions", headers=headers, json=payload)
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
@@ -92,15 +103,17 @@ if uploaded_zip:
                         output = ask_together(prompt)
                         parsed = json.loads(output)
                         pages = next((p["page_count"] for p in pdf_info if p["file_name"] == file_name), "N/A")
+                        # Translate to Korean
+                        title_ko = translate_to_korean(parsed["title"])
+                        desc_ko = translate_to_korean(parsed["brief_description"])
 
-                        # Always show both title versions
                         row = {
                             "Original File Name": file_name,
                             "Pages": pages,
-                            "English Title": parsed["title"] if parsed["title"].isascii() else parsed["translated_title"],
-                            "Korean Title": parsed["translated_title"] if not parsed["translated_title"].isascii() else parsed["title"],
-                            "Description (EN)": parsed.get("brief_description_en", ""),
-                            "Description (KO)": parsed.get("brief_description_ko", "")
+                            "English Title": parsed["title"],
+                            "Korean Title": title_ko,
+                            "Description (EN)": parsed["brief_description"],
+                            "Description (KO)": desc_ko
                         }
                         results.append(row)
 
@@ -113,7 +126,7 @@ if uploaded_zip:
 **📘 Description (EN)**: {row['Description (EN)']}  
 **📙 Description (KO)**: {row['Description (KO)']}
 """)
-                        st.success("✅ Parsed successfully.")
+                        st.success("✅ Parsed and translated successfully.")
                     except json.JSONDecodeError:
                         st.error("❌ LLM did not return valid JSON.")
                         st.text(output)
