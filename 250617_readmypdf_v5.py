@@ -107,7 +107,7 @@ if uploaded_zip:
                     "Description (KO)": "-"
                 }
 
-    if "filename_result" in st.session_state:
+    if "filename_result" in st.session_state and st.session_state.filename_result is not None:
         st.markdown(f"""
 **Original File Name**: `{selected_file}`  
 **Pages**: {pages}  
@@ -145,7 +145,7 @@ if uploaded_zip:
         if prompt_option == "Freeform prompt":
             user_prompt = st.text_area("Enter your own prompt:", key="custom_prompt")
         else:
-            user_prompt = f"{prompt_option}:" + st.session_state.page_text
+            user_prompt = f"{prompt_option}: {st.session_state.page_text}"
 
         if st.button("Run LLM Analysis") and user_prompt.strip():
             with st.spinner("🧠 Sending selected page to LLM..."):
