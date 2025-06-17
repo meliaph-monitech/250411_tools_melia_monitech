@@ -136,7 +136,7 @@ if uploaded_zip:
                             if prompt_option == "Freeform prompt":
                                 user_prompt = st.text_area("Enter your own prompt:")
                             else:
-                                user_prompt = f"{prompt_option}:
+                                user_prompt = f"{prompt_option}:\n" + page_text
 {page_text}"
 
                             if user_prompt.strip():
