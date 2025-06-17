@@ -34,7 +34,7 @@ def build_prompt(file_name):
     return f"""
 You are a smart document assistant.
 
-The following string is a PDF file name that may include tags like [한학논문], publication dates, or extra metadata.
+The following string is a PDF file name that may include tags that mostly written inside "[ ]", publication dates, unnecessary symbols, or extra metadata.
 
 Please extract:
 1. A clean, human-readable **title** of the paper.
