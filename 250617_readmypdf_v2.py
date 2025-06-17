@@ -7,12 +7,12 @@ import requests
 import pandas as pd
 import json
 
-# Together.ai setup
+# Together.ai API setup
 TOGETHER_API_KEY = st.secrets["together"]["api_key"]
 TOGETHER_URL = "https://api.together.xyz/v1/chat/completions"
 MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
 
-# LibreTranslate setup (no key required for public endpoint)
+# LibreTranslate public endpoint
 TRANSLATE_URL = "https://libretranslate.de/translate"
 
 def translate_to_korean(text):
@@ -21,6 +21,18 @@ def translate_to_korean(text):
             "q": text,
             "source": "en",
             "target": "ko",
+            "format": "text"
+        })
+        return response.json()["translatedText"]
+    except:
+        return "⚠️ Translation failed"
+
+def translate_to_english(text):
+    try:
+        response = requests.post(TRANSLATE_URL, json={
+            "q": text,
+            "source": "ko",
+            "target": "en",
             "format": "text"
         })
         return response.json()["translatedText"]
@@ -56,7 +68,7 @@ Given a raw filename, do the following:
 Respond only in this exact JSON format:
 {{
   "title": "cleaned readable title",
-  "brief_description": "short summary in English"
+  "brief_description": "short summary in English or Korean depending on title language"
 }}
 
 Filename: {file_name}
@@ -103,16 +115,28 @@ if uploaded_zip:
                         output = ask_together(prompt)
                         parsed = json.loads(output)
                         pages = next((p["page_count"] for p in pdf_info if p["file_name"] == file_name), "N/A")
-                        # Translate to Korean
-                        title_ko = translate_to_korean(parsed["title"])
-                        desc_ko = translate_to_korean(parsed["brief_description"])
+
+                        title = parsed["title"]
+                        description = parsed["brief_description"]
+
+                        # Detect language by checking ASCII
+                        if title.isascii():
+                            title_en = title
+                            desc_en = description
+                            title_ko = translate_to_korean(title_en)
+                            desc_ko = translate_to_korean(desc_en)
+                        else:
+                            title_ko = title
+                            desc_ko = description
+                            title_en = translate_to_english(title_ko)
+                            desc_en = translate_to_english(desc_ko)
 
                         row = {
                             "Original File Name": file_name,
                             "Pages": pages,
-                            "English Title": parsed["title"],
+                            "English Title": title_en,
                             "Korean Title": title_ko,
-                            "Description (EN)": parsed["brief_description"],
+                            "Description (EN)": desc_en,
                             "Description (KO)": desc_ko
                         }
                         results.append(row)
