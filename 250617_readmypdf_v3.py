@@ -115,7 +115,15 @@ if uploaded_zip:
                 with st.spinner("🔍 Analyzing with DeepSeek via OpenRouter..."):
                     try:
                         output = ask_llm(prompt)
-                        parsed = json.loads(output)
+                        # parsed = json.loads(output)
+                        try:
+                            cleaned = output.strip().strip("```json").strip("```").strip()
+                            parsed = json.loads(cleaned)
+                        except Exception:
+                            st.error("❌ Failed to parse JSON from LLM.")
+                            st.text(output)
+                            raise
+
                         pages = next((p["page_count"] for p in pdf_info if p["file_name"] == file_name), "N/A")
 
                         title = parsed["title"]
