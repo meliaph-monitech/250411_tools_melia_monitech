@@ -80,77 +80,87 @@ if uploaded_zip:
     if non_pdf_files:
         st.warning(f"⚠️ {len(non_pdf_files)} non-PDF file(s) detected. This app only supports PDFs.")
 
-    selected_file = st.selectbox("Select PDF file to analyze:", raw_filenames)
+    selected_file = st.selectbox("Select PDF file to analyze:", raw_filenames, key="selected_pdf")
+    selected_meta = next((p for p in pdf_info if p["file_name"] == selected_file), {})
+    pages = selected_meta.get("page_count", "N/A")
+    pdf_path = selected_meta.get("path")
 
-    if selected_file:
+    if selected_file and "filename_result" not in st.session_state:
         prompt = build_prompt(selected_file)
-
         with st.spinner("🔍 Analyzing filename with DeepSeek..."):
             try:
                 output = ask_llm(prompt)
                 cleaned = output.strip().strip("```json").strip("```").strip()
                 parsed = json.loads(cleaned)
-                selected_meta = next((p for p in pdf_info if p["file_name"] == selected_file), {})
-                pages = selected_meta.get("page_count", "N/A")
-                pdf_path = selected_meta.get("path")
-
-                row = {
-                    "Original File Name": selected_file,
-                    "Pages": pages,
+                st.session_state.filename_result = {
                     "English Title": parsed.get("title_en", "-"),
                     "Korean Title": parsed.get("title_ko", "-"),
                     "Description (EN)": parsed.get("description_en", "-"),
                     "Description (KO)": parsed.get("description_ko", "-")
                 }
+                st.success("✅ Filename parsed and translated successfully.")
+            except Exception as e:
+                st.session_state.filename_result = {
+                    "English Title": "❌ Error",
+                    "Korean Title": "❌ Error",
+                    "Description (EN)": str(e),
+                    "Description (KO)": "-"
+                }
 
-                st.markdown(f"""
+    if "filename_result" in st.session_state:
+        st.markdown(f"""
 **Original File Name**: `{selected_file}`  
 **Pages**: {pages}  
-**English Title**: *{row['English Title']}*  
-**Korean Title**: *{row['Korean Title']}*  
+**English Title**: *{st.session_state.filename_result['English Title']}*  
+**Korean Title**: *{st.session_state.filename_result['Korean Title']}*  
 
-**📘 Description (EN)**: {row['Description (EN)']}  
-**📙 Description (KO)**: {row['Description (KO)']}
+**📘 Description (EN)**: {st.session_state.filename_result['Description (EN)']}  
+**📙 Description (KO)**: {st.session_state.filename_result['Description (KO)']}
 """)
-                st.success("✅ Filename parsed and translated successfully.")
 
-                if isinstance(pages, int):
-                    st.subheader("📄 Page-based Text Analysis")
-                    selected_page = st.number_input("Select page number to analyze:", min_value=1, max_value=pages, step=1)
+    if isinstance(pages, int):
+        st.subheader("📄 Page-based Text Analysis")
+        selected_page = st.number_input("Select page number to analyze:", min_value=1, max_value=pages, step=1, key="selected_page")
 
-                    if st.button("Analyze selected page"):
-                        try:
-                            doc = fitz.open(pdf_path)
-                            page_text = doc.load_page(selected_page - 1).get_text()
-                            doc.close()
-
-                            st.text_area("Extracted text from selected page:", page_text, height=200)
-
-                            prompt_option = st.selectbox("Choose a task for this page:", [
-                                "Translate to the opposite language (KR ↔ EN)",
-                                "Summarize in both English and Korean",
-                                "Extract technical terms",
-                                "Freeform prompt"
-                            ])
-
-                            if prompt_option == "Freeform prompt":
-                                user_prompt = st.text_area("Enter your own prompt:")
-                            else:
-                                user_prompt = f"{prompt_option}:\n" + page_text
-
-                            if user_prompt.strip():
-                                with st.spinner("🧠 Sending selected page to LLM..."):
-                                    result = ask_llm(user_prompt)
-                                    st.markdown("### 🧾 LLM Output:")
-                                    st.write(result)
-
-                        except Exception as e:
-                            st.error("❌ Error during page extraction or LLM call.")
-                            st.exception(e)
-
-            except json.JSONDecodeError:
-                st.error("❌ LLM did not return valid JSON.")
-                st.text(output)
+        if "page_text" not in st.session_state or st.session_state.page_from != selected_page:
+            try:
+                doc = fitz.open(pdf_path)
+                page_text = doc.load_page(selected_page - 1).get_text()
+                doc.close()
+                st.session_state.page_text = page_text
+                st.session_state.page_from = selected_page
             except Exception as e:
-                st.error("❌ Unexpected error.")
-                st.exception(e)
+                st.session_state.page_text = "❌ Failed to extract text from page."
+                st.session_state.page_from = selected_page
+
+        st.text_area("Extracted text from selected page:", st.session_state.page_text, height=200)
+
+        prompt_option = st.selectbox("Choose a task for this page:", [
+            "Translate to the opposite language (KR ↔ EN)",
+            "Summarize in both English and Korean",
+            "Extract technical terms",
+            "Freeform prompt"
+        ], key="selected_task")
+
+        if prompt_option == "Freeform prompt":
+            user_prompt = st.text_area("Enter your own prompt:", key="custom_prompt")
+        else:
+            user_prompt = f"{prompt_option}:
+" + st.session_state.page_text
+
+        if st.button("Run LLM Analysis") and user_prompt.strip():
+            with st.spinner("🧠 Sending selected page to LLM..."):
+                try:
+                    result = ask_llm(user_prompt)
+                    st.markdown("### 🧾 LLM Output:")
+                    st.write(result)
+                except Exception as e:
+                    st.error("❌ LLM call failed.")
+                    st.exception(e)
+
+    # Reset filename analysis when changing file
+    if st.session_state.get("_selected_file") != selected_file:
+        st.session_state.filename_result = None
+        st.session_state.page_text = ""
+        st.session_state.page_from = None
+        st.session_state._selected_file = selected_file
