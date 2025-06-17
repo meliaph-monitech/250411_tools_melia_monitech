@@ -101,7 +101,7 @@ if uploaded_zip:
                             "Pages": pages,
                             "English Title": parsed.get("title_en", "-"),
                             "Korean Title": parsed.get("title_ko", "-"),
-                            "Description (EN)": parsed.get("description_en", "-"),
+                            "Description (EN)": parsed.get("description_en", "-") + "\n",
                             "Description (KO)": parsed.get("description_ko", "-")
                         }
                         results.append(row)
