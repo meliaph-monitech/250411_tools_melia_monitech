@@ -101,7 +101,15 @@ if uploaded_zip:
                         }
                         results.append(row)
                         st.success("✅ Parsed successfully.")
-                        st.dataframe(pd.DataFrame([row]))
+                        # st.dataframe(pd.DataFrame([row]))
+                        st.markdown(f"""
+                        **Original File Name**: `{row['Original File Name']}`  
+                        **Pages**: {row['Pages']}  
+                        **English Title**: *{row['English Title']}*  
+                        **Korean Title**: *{row['Korean Title']}*  
+                        **Description**: {row['Description']}
+                        """)
+
                     except json.JSONDecodeError:
                         st.error("❌ LLM did not return valid JSON.")
                         st.text(output)
