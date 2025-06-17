@@ -53,6 +53,8 @@ def extract_pdfs(zip_file):
 # Filename: {file_name}
 # """
 
+
+##### but only include terms that are technical, uncommon, or context-specific — skip generic or well-known words
 def build_prompt(file_name):
     return f"""
 You are a smart document assistant.
@@ -64,7 +66,7 @@ Please extract:
 2. Detect the language of the title (Korean or English).
 3. Translate the title into the opposite language (Korean ↔ English).
 4. Provide a summary of what the document might be about.
-5. Break down the final assumed title word-by-word as a vocabulary list but only include terms that are technical, uncommon, or context-specific — skip generic or well-known words. For each word, include:
+5. Break down the final assumed title word-by-word as a vocabulary list. For each word, include: 
    - English word (or romanized Korean)
    - Korean translation
    - A simple English definition
