@@ -6,6 +6,8 @@ import fitz  # PyMuPDF
 import requests
 import json
 
+st.title("LLM-based - Deep Seek V3 0324 Free Ver. | Smart Document Explainer")
+
 # OpenRouter (DeepSeek) API
 OPENROUTER_API_KEY = st.secrets["openrouter"]["api_key"]
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
