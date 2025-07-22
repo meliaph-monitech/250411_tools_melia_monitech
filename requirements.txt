@@ -5,3 +5,6 @@ streamlit-autorefresh
 openai
 pymupdf
 pandas
+numpy
+plotly
+scipy
