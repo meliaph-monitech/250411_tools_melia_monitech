@@ -90,7 +90,7 @@ def segment_beads(df, column, threshold):
 
 if uploaded_file is not None:
     df = load_csv(uploaded_file)
-    st.write("Data Preview:", df.head())
+    # st.write("Data Preview:", df.head())
 
     if "beads" not in st.session_state:
         with st.sidebar:
