@@ -129,9 +129,10 @@ if uploaded_file is not None:
             filtered = selected_data[f"{signal_label}_filter"]
 
             fig = go.Figure()
-            fig.add_trace(go.Scatter(y=raw, name="Raw"))
-            fig.add_trace(go.Scatter(y=curve, name="Curve Fitting"))
-            fig.add_trace(go.Scatter(y=filtered, name=f"{filter_type} Filter"))
+            fig.add_trace(go.Scatter(y=raw, name="Raw", line=dict(color='gray', dash='solid')))
+            fig.add_trace(go.Scatter(y=curve, name="Curve Fitting", line=dict(color='blue', dash='dash')))
+            fig.add_trace(go.Scatter(y=filtered, name=f"{filter_type} Filter", line=dict(color='red', dash='solid')))
+
             st.subheader(f"{'NIR' if idx == 0 else 'VIS'} - Bead {selected_bead_idx + 1}")
             st.plotly_chart(fig, use_container_width=True)
 
