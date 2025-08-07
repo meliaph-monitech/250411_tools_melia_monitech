@@ -15,7 +15,6 @@ status_csv = st.sidebar.file_uploader("Upload Machine Status CSV", type="csv")
 
 # --- Helper Function ---
 @st.cache_data
-
 def process_zip(zip_file):
     plots_data = []
     all_times = []
@@ -119,6 +118,19 @@ if uploaded_zip:
 
             fig = go.Figure()
 
+            # Plot status line first (send to back)
+            if df_status_filtered is not None and not df_status_filtered.empty:
+                fig.add_trace(go.Scatter(
+                    x=df_status_filtered["Timestamp"],
+                    y=df_status_filtered["Value"],
+                    mode="lines",
+                    name=f"Status: {selected_stat1}-{selected_stat2}",
+                    line=dict(width=2, dash="dot", color="rgba(100,100,100,0.2)"),
+                    yaxis="y2",
+                    hovertemplate="Time: %{x|%Y-%m-%d %H:%M:%S}<br>Status Value: %{y}<extra></extra>",
+                    opacity=0.8
+                ))
+
             for bead in df_plot["bead_number"].unique():
                 sub = df_plot[df_plot["bead_number"] == bead]
                 fig.add_trace(go.Scatter(
@@ -135,18 +147,6 @@ if uploaded_zip:
                         f"File: %{{customdata[0]}}<extra></extra>"
                     ),
                     yaxis="y1"
-                ))
-
-            if df_status_filtered is not None and not df_status_filtered.empty:
-                fig.add_trace(go.Scatter(
-                    x=df_status_filtered["Timestamp"],
-                    y=df_status_filtered["Value"],
-                    mode="lines",
-                    name=f"Status: {selected_stat1}-{selected_stat2}",
-                    line=dict(width=2, dash="dot"),
-                    marker=dict(size=4),
-                    yaxis="y2",
-                    hovertemplate="Time: %{x|%Y-%m-%d %H:%M:%S}<br>Status Value: %{y}<extra></extra>"
                 ))
 
             fig.update_layout(
