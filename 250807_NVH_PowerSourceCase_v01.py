@@ -3,7 +3,6 @@ import pandas as pd
 import zipfile
 import re
 from datetime import datetime
-from io import StringIO
 import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
@@ -63,9 +62,8 @@ if uploaded_zip:
     if not plots_data:
         st.warning("No valid CSV data found.")
     else:
-        # Get all available dates
         all_dates = sorted(set(
-            df["date"].iloc[0] for _, df in plots_data if not df.empty
+            date for _, df in plots_data for date in df["date"].unique()
         ))
         selected_date = st.selectbox("Select Date (or show All)", options=["All"] + all_dates)
 
@@ -83,9 +81,9 @@ if uploaded_zip:
                 fig.add_trace(go.Scatter(
                     x=sub["timestamp"],
                     y=sub["signal"],
-                    mode="lines",  # 🔹 only lines, no dots
+                    mode="lines",
                     name=bead,
-                    line=dict(width=1),  # 🔹 thin line
+                    line=dict(width=1),
                     hovertemplate=(
                         f"Bead: {bead}<br>"
                         f"Time: %{{x|%Y-%m-%d %H:%M:%S}}<br>"
