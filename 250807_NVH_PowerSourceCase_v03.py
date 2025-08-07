@@ -4,6 +4,7 @@ import zipfile
 import re
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
+from bisect import bisect_left
 
 st.set_page_config(layout="wide")
 st.title("Bead Signal Viewer with Machine Status Overlay (Dual Y-Axis, Compressed Time)")
@@ -12,10 +13,38 @@ with st.sidebar:
     uploaded_zip = st.file_uploader("Upload ZIP of bead signal CSVs", type="zip")
     status_csv = st.file_uploader("Upload machine status CSV", type="csv")
 
+
+# Map each status timestamp to closest original_time in ZIP (within tolerance)
+def map_status_to_adjusted_time(df_status, adjusted_time_map, tolerance_seconds=1):
+    zip_times = sorted(adjusted_time_map.keys())
+    matched_adjusted = []
+
+    for ts in df_status["Timestamp"]:
+        pos = bisect_left(zip_times, ts)
+        nearest = None
+
+        if pos == 0:
+            nearest = zip_times[0]
+        elif pos == len(zip_times):
+            nearest = zip_times[-1]
+        else:
+            before = zip_times[pos - 1]
+            after = zip_times[pos]
+            nearest = before if abs(ts - before) <= abs(ts - after) else after
+
+        if abs(ts - nearest) <= timedelta(seconds=tolerance_seconds):
+            matched_adjusted.append(adjusted_time_map[nearest])
+        else:
+            matched_adjusted.append(None)
+
+    df_status["adjusted_time"] = matched_adjusted
+    return df_status.dropna(subset=["adjusted_time"])
+
+
 @st.cache_data
 def process_zip(zip_file):
     plots_data = []
-    adjusted_time_map = dict()  # maps original_time -> adjusted_time
+    adjusted_time_map = dict()
 
     with zipfile.ZipFile(zip_file) as z:
         for csv_filename in sorted(z.namelist()):
@@ -56,7 +85,6 @@ def process_zip(zip_file):
                 df_plot = pd.DataFrame(plot_rows)
                 df_plot = df_plot.sort_values("original_time").reset_index(drop=True)
 
-                # Compress date gaps
                 compressed_times = []
                 prev_date = None
                 last_end_time = None
@@ -72,8 +100,6 @@ def process_zip(zip_file):
 
                     compressed_time = current_time - time_offset
                     compressed_times.append(compressed_time)
-
-                    # map original -> adjusted time
                     adjusted_time_map[current_time] = compressed_time
 
                     prev_date = current_date
@@ -91,9 +117,9 @@ def process_status_csv(status_file, adjusted_time_map):
         return None, []
 
     df_status["Timestamp"] = pd.to_datetime(df_status["Timestamp"])
-    df_status = df_status[df_status["Timestamp"].isin(adjusted_time_map.keys())].copy()
-    df_status["adjusted_time"] = df_status["Timestamp"].map(adjusted_time_map)
-    df_status.dropna(subset=["adjusted_time"], inplace=True)
+    df_status = map_status_to_adjusted_time(df_status, adjusted_time_map, tolerance_seconds=1)
+    if df_status.empty:
+        return None, []
 
     unique_pairs = df_status[["Stat1", "Stat2"]].dropna().drop_duplicates()
     stat1_options = unique_pairs["Stat1"].unique().tolist()
@@ -107,12 +133,13 @@ if uploaded_zip:
     if not plots_data:
         st.warning("No valid signal CSVs found in ZIP.")
     else:
-        # Process status CSV if present
         df_status = None
         selected_stat1 = selected_stat2 = None
+
         if status_csv:
             with st.spinner("Processing machine status CSV..."):
                 df_status, stat1_options = process_status_csv(status_csv, adjusted_time_map)
+
                 if df_status is None or df_status.empty:
                     st.warning("No valid or aligned machine status data found.")
                 else:
@@ -126,13 +153,10 @@ if uploaded_zip:
                         (df_status["Stat2"] == selected_stat2)
                     ]
 
-        # Draw figures
         for csv_file_name, df_plot in plots_data:
             st.subheader(f"📄 Plot from file: {csv_file_name}")
-
             fig = go.Figure()
 
-            # Plot bead lines (left Y-axis)
             for bead in df_plot["bead_number"].unique():
                 sub = df_plot[df_plot["bead_number"] == bead]
 
@@ -152,7 +176,6 @@ if uploaded_zip:
                     yaxis="y1"
                 ))
 
-            # Plot machine status line (right Y-axis)
             if status_csv and df_status is not None and not stat_filtered.empty:
                 fig.add_trace(go.Scatter(
                     x=stat_filtered["adjusted_time"],
@@ -181,3 +204,5 @@ if uploaded_zip:
             )
 
             st.plotly_chart(fig, use_container_width=True)
+
+##
