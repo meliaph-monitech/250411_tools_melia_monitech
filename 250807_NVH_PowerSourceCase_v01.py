@@ -7,14 +7,14 @@ from io import StringIO
 import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
-st.title("Bead Signal Viewer: One Plot per CSV File")
+st.title("Bead Signal Viewer – One Plot per CSV")
 
-uploaded_zip = st.file_uploader("Upload ZIP file containing CSVs", type="zip")
+uploaded_zip = st.file_uploader("Upload ZIP of CSVs", type="zip")
 
 @st.cache_data
 def process_zip(zip_file):
     with zipfile.ZipFile(zip_file) as z:
-        all_plots_data = []
+        plots_data = []
 
         for file_name in sorted(z.namelist()):
             if not file_name.lower().endswith(".csv"):
@@ -26,14 +26,12 @@ def process_zip(zip_file):
             for _, row in df.iterrows():
                 csv_name = str(row[0])
 
-                # Extract hhmmss, YYMMDD, etc.
                 match = re.search(r"(?P<time>\d{6})_(?P<bm>[A-Z0-9]+)_.*?_(?P<f>F\d+)(?:_(?P<stat>[^.]+))?\.csv", csv_name)
                 if not match:
                     continue
 
                 hhmmss = match.group("time")
                 bma_code = match.group("bm")
-
                 date_match = re.search(r"(\d{6})Y\d{4}", bma_code)
                 yymmdd = date_match.group(1) if date_match else "000000"
 
@@ -52,16 +50,16 @@ def process_zip(zip_file):
                     "csv_name": csv_name
                 })
 
-                all_plots_data.append((csv_name, df_plot))
+                plots_data.append((csv_name, df_plot))
 
-        return all_plots_data
+        return plots_data
 
 if uploaded_zip:
-    with st.spinner("Processing..."):
+    with st.spinner("Processing CSV files..."):
         plots_data = process_zip(uploaded_zip)
 
     if not plots_data:
-        st.warning("No valid CSV files found.")
+        st.warning("No valid CSV data found.")
     else:
         for csv_name, df_plot in plots_data:
             st.subheader(f"📄 {csv_name}")
@@ -75,13 +73,15 @@ if uploaded_zip:
                     mode="lines+markers",
                     name=bead,
                     hovertemplate=(
-                        f"Bead: {bead}<br>Time: %{x|%Y-%m-%d %H:%M:%S}<br>"
-                        f"Signal: %{y:.2f}<br>File: {csv_name}<extra></extra>"
+                        f"Bead: {bead}<br>"
+                        f"Time: %{{x|%Y-%m-%d %H:%M:%S}}<br>"
+                        f"Signal: %{{y:.2f}}<br>"
+                        f"File: {csv_name}<extra></extra>"
                     )
                 ))
 
             fig.update_layout(
-                title=f"Signal per Bead - {csv_name}",
+                title=f"Signal per Bead – {csv_name}",
                 xaxis_title="Time",
                 yaxis_title="Signal",
                 height=500,
