@@ -23,7 +23,6 @@ def process_zip(zip_file):
             with z.open(csv_filename) as f:
                 df = pd.read_csv(f, header=None)
 
-            # Prepare long-form data
             plot_rows = []
             for _, row in df.iterrows():
                 csv_name = str(row[0])
@@ -46,7 +45,9 @@ def process_zip(zip_file):
                         "timestamp": timestamp,
                         "signal": row[i],
                         "bead_number": f"Bead {i:02d}",
-                        "csv_name": csv_name
+                        "csv_name": csv_name,
+                        "source_file": csv_filename,
+                        "date": timestamp.date().isoformat()
                     })
 
             if plot_rows:
@@ -62,7 +63,18 @@ if uploaded_zip:
     if not plots_data:
         st.warning("No valid CSV data found.")
     else:
+        # Get all available dates
+        all_dates = sorted(set(
+            df["date"].iloc[0] for _, df in plots_data if not df.empty
+        ))
+        selected_date = st.selectbox("Select Date (or show All)", options=["All"] + all_dates)
+
         for csv_file_name, df_plot in plots_data:
+            if selected_date != "All":
+                df_plot = df_plot[df_plot["date"] == selected_date]
+                if df_plot.empty:
+                    continue
+
             st.subheader(f"📄 Plot from file: {csv_file_name}")
 
             fig = go.Figure()
@@ -71,13 +83,14 @@ if uploaded_zip:
                 fig.add_trace(go.Scatter(
                     x=sub["timestamp"],
                     y=sub["signal"],
-                    mode="lines+markers",
+                    mode="lines",  # 🔹 only lines, no dots
                     name=bead,
+                    line=dict(width=1),  # 🔹 thin line
                     hovertemplate=(
                         f"Bead: {bead}<br>"
                         f"Time: %{{x|%Y-%m-%d %H:%M:%S}}<br>"
                         f"Signal: %{{y:.2f}}<br>"
-                        f"Source: %{{customdata[0]}}<extra></extra>"
+                        f"File: %{{customdata[0]}}<extra></extra>"
                     ),
                     customdata=sub[["csv_name"]]
                 ))
@@ -87,6 +100,7 @@ if uploaded_zip:
                 xaxis_title="Time",
                 yaxis_title="Signal",
                 height=500,
-                legend_title="Bead"
+                legend_title="Bead",
+                hovermode="x unified"
             )
             st.plotly_chart(fig, use_container_width=True)
