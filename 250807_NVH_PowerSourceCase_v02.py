@@ -42,6 +42,7 @@ def process_zip(zip_file):
                 for i in range(1, len(row)):
                     plot_rows.append({
                         "timestamp": timestamp,
+                        "date": timestamp.date(),
                         "signal": row[i],
                         "bead_number": f"Bead {i:02d}",
                         "csv_name": csv_name,
@@ -66,29 +67,22 @@ if uploaded_zip:
 
             fig = go.Figure()
 
-            # Plot each bead with gap handling
             for bead in df_plot["bead_number"].unique():
                 sub = df_plot[df_plot["bead_number"] == bead].sort_values("timestamp")
-
-                # Insert None where time jump > 2x median delta (adaptive)
                 sub = sub.reset_index(drop=True)
-                sub["time_diff"] = sub["timestamp"].diff().dt.total_seconds()
-
-                if len(sub) >= 3:
-                    median_diff = sub["time_diff"].median()
-                    gap_threshold = median_diff * 2 if pd.notna(median_diff) else 10
-                else:
-                    gap_threshold = 10  # default 10s
 
                 xs, ys, cds = [], [], []
+                prev_date = None
                 for i, row in sub.iterrows():
-                    if i > 0 and row["time_diff"] > gap_threshold:
+                    current_date = row["date"]
+                    if prev_date is not None and current_date != prev_date:
                         xs.append(None)
                         ys.append(None)
                         cds.append(None)
                     xs.append(row["timestamp"])
                     ys.append(row["signal"])
                     cds.append(row["csv_name"])
+                    prev_date = current_date
 
                 fig.add_trace(go.Scatter(
                     x=xs,
