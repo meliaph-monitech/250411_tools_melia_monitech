@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 import zipfile
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
-st.title("Bead Signal Viewer – One Plot per Uploaded CSV File (Compressed Time Gaps)")
+st.title("Bead Signal Viewer – One Plot per Uploaded CSV File (Compressed Days)")
 
 uploaded_zip = st.file_uploader("Upload ZIP of CSVs", type="zip")
 
@@ -41,8 +41,8 @@ def process_zip(zip_file):
 
                 for i in range(1, len(row)):
                     plot_rows.append({
-                        "timestamp": timestamp,
-                        "timestamp_str": timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        "original_time": timestamp,
+                        "date": timestamp.date(),
                         "signal": row[i],
                         "bead_number": f"Bead {i:02d}",
                         "csv_name": csv_name,
@@ -51,6 +51,31 @@ def process_zip(zip_file):
 
             if plot_rows:
                 df_plot = pd.DataFrame(plot_rows)
+                df_plot = df_plot.sort_values("original_time").reset_index(drop=True)
+
+                # Compress gaps between dates
+                compressed_times = []
+                prev_date = None
+                prev_time = None
+                time_offset = timedelta(0)
+                last_end_time = None
+
+                for i, row in df_plot.iterrows():
+                    current_time = row["original_time"]
+                    current_date = row["date"]
+
+                    if prev_date is not None and current_date != prev_date:
+                        # new day: calculate gap to remove
+                        gap = current_time - last_end_time
+                        time_offset += gap
+
+                    compressed_time = current_time - time_offset
+                    compressed_times.append(compressed_time)
+
+                    prev_date = current_date
+                    last_end_time = current_time
+
+                df_plot["adjusted_time"] = compressed_times
                 plots_data.append((csv_filename, df_plot))
 
     return plots_data
@@ -67,20 +92,19 @@ if uploaded_zip:
 
             fig = go.Figure()
 
-            x_labels = df_plot["timestamp_str"].unique().tolist()
-
             for bead in df_plot["bead_number"].unique():
                 sub = df_plot[df_plot["bead_number"] == bead]
+
                 fig.add_trace(go.Scatter(
-                    x=sub["timestamp_str"],
+                    x=sub["adjusted_time"],
                     y=sub["signal"],
                     mode="lines",
                     name=bead,
                     line=dict(width=1),
-                    customdata=sub[["csv_name"]],
+                    customdata=sub[["csv_name", "original_time"]],
                     hovertemplate=(
                         f"Bead: {bead}<br>"
-                        f"Time: %{{x}}<br>"
+                        f"Original Time: %{{customdata[1]|%Y-%m-%d %H:%M:%S}}<br>"
                         f"Signal: %{{y:.2f}}<br>"
                         f"File: %{{customdata[0]}}<extra></extra>"
                     )
@@ -88,15 +112,10 @@ if uploaded_zip:
 
             fig.update_layout(
                 title=f"Signal per Bead – from {csv_file_name}",
-                xaxis_title="Time (Data Only)",
+                xaxis_title="Compressed Time (Continuous Data Only)",
                 yaxis_title="Signal",
                 height=500,
                 legend_title="Bead",
-                xaxis=dict(
-                    type="category",  # ✅ Discrete X-axis to compress gaps
-                    tickmode="auto",
-                    tickangle=45
-                ),
                 hovermode="x unified"
             )
             st.plotly_chart(fig, use_container_width=True)
