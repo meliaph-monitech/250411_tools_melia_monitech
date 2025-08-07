@@ -4,15 +4,47 @@ import zipfile
 import re
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
+from bisect import bisect_left
 
 st.set_page_config(layout="wide")
-st.title("Bead Signal Viewer – One Plot per Uploaded CSV File (Compressed Days)")
+st.title("Bead Signal Viewer with Machine Status Overlay (Dual Y-Axis, Compressed Time)")
 
-uploaded_zip = st.file_uploader("Upload ZIP of CSVs", type="zip")
+with st.sidebar:
+    uploaded_zip = st.file_uploader("Upload ZIP of bead signal CSVs", type="zip")
+    status_csv = st.file_uploader("Upload machine status CSV", type="csv")
+
+
+# Map each status timestamp to closest original_time in ZIP (within tolerance)
+def map_status_to_adjusted_time(df_status, adjusted_time_map, tolerance_seconds=1):
+    zip_times = sorted(adjusted_time_map.keys())
+    matched_adjusted = []
+
+    for ts in df_status["Timestamp"]:
+        pos = bisect_left(zip_times, ts)
+        nearest = None
+
+        if pos == 0:
+            nearest = zip_times[0]
+        elif pos == len(zip_times):
+            nearest = zip_times[-1]
+        else:
+            before = zip_times[pos - 1]
+            after = zip_times[pos]
+            nearest = before if abs(ts - before) <= abs(ts - after) else after
+
+        if abs(ts - nearest) <= timedelta(seconds=tolerance_seconds):
+            matched_adjusted.append(adjusted_time_map[nearest])
+        else:
+            matched_adjusted.append(None)
+
+    df_status["adjusted_time"] = matched_adjusted
+    return df_status.dropna(subset=["adjusted_time"])
+
 
 @st.cache_data
 def process_zip(zip_file):
     plots_data = []
+    adjusted_time_map = dict()
 
     with zipfile.ZipFile(zip_file) as z:
         for csv_filename in sorted(z.namelist()):
@@ -53,24 +85,22 @@ def process_zip(zip_file):
                 df_plot = pd.DataFrame(plot_rows)
                 df_plot = df_plot.sort_values("original_time").reset_index(drop=True)
 
-                # Compress gaps between dates
                 compressed_times = []
                 prev_date = None
-                prev_time = None
-                time_offset = timedelta(0)
                 last_end_time = None
+                time_offset = timedelta(0)
 
-                for i, row in df_plot.iterrows():
+                for _, row in df_plot.iterrows():
                     current_time = row["original_time"]
                     current_date = row["date"]
 
                     if prev_date is not None and current_date != prev_date:
-                        # new day: calculate gap to remove
                         gap = current_time - last_end_time
                         time_offset += gap
 
                     compressed_time = current_time - time_offset
                     compressed_times.append(compressed_time)
+                    adjusted_time_map[current_time] = compressed_time
 
                     prev_date = current_date
                     last_end_time = current_time
@@ -78,18 +108,53 @@ def process_zip(zip_file):
                 df_plot["adjusted_time"] = compressed_times
                 plots_data.append((csv_filename, df_plot))
 
-    return plots_data
+    return plots_data, adjusted_time_map
+
+
+def process_status_csv(status_file, adjusted_time_map):
+    df_status = pd.read_csv(status_file)
+    if not {"Timestamp", "Stat1", "Stat2", "Value"}.issubset(df_status.columns):
+        return None, []
+
+    df_status["Timestamp"] = pd.to_datetime(df_status["Timestamp"])
+    df_status = map_status_to_adjusted_time(df_status, adjusted_time_map, tolerance_seconds=1)
+    if df_status.empty:
+        return None, []
+
+    unique_pairs = df_status[["Stat1", "Stat2"]].dropna().drop_duplicates()
+    stat1_options = unique_pairs["Stat1"].unique().tolist()
+    return df_status, stat1_options
+
 
 if uploaded_zip:
-    with st.spinner("Processing uploaded CSVs..."):
-        plots_data = process_zip(uploaded_zip)
+    with st.spinner("Processing bead signal ZIP..."):
+        plots_data, adjusted_time_map = process_zip(uploaded_zip)
 
     if not plots_data:
-        st.warning("No valid CSV data found.")
+        st.warning("No valid signal CSVs found in ZIP.")
     else:
+        df_status = None
+        selected_stat1 = selected_stat2 = None
+
+        if status_csv:
+            with st.spinner("Processing machine status CSV..."):
+                df_status, stat1_options = process_status_csv(status_csv, adjusted_time_map)
+
+                if df_status is None or df_status.empty:
+                    st.warning("No valid or aligned machine status data found.")
+                else:
+                    with st.sidebar:
+                        selected_stat1 = st.selectbox("Select Stat1", stat1_options)
+                        stat2_options = df_status[df_status["Stat1"] == selected_stat1]["Stat2"].unique().tolist()
+                        selected_stat2 = st.selectbox("Select Stat2", stat2_options)
+
+                    stat_filtered = df_status[
+                        (df_status["Stat1"] == selected_stat1) &
+                        (df_status["Stat2"] == selected_stat2)
+                    ]
+
         for csv_file_name, df_plot in plots_data:
             st.subheader(f"📄 Plot from file: {csv_file_name}")
-
             fig = go.Figure()
 
             for bead in df_plot["bead_number"].unique():
@@ -107,15 +172,35 @@ if uploaded_zip:
                         f"Original Time: %{{customdata[1]|%Y-%m-%d %H:%M:%S}}<br>"
                         f"Signal: %{{y:.2f}}<br>"
                         f"File: %{{customdata[0]}}<extra></extra>"
+                    ),
+                    yaxis="y1"
+                ))
+
+            if status_csv and df_status is not None and not stat_filtered.empty:
+                fig.add_trace(go.Scatter(
+                    x=stat_filtered["adjusted_time"],
+                    y=stat_filtered["Value"],
+                    mode="lines+markers",
+                    name=f"{selected_stat1}-{selected_stat2}",
+                    line=dict(color="firebrick", width=2, dash="dot"),
+                    marker=dict(size=4),
+                    yaxis="y2",
+                    customdata=stat_filtered[["Timestamp"]],
+                    hovertemplate=(
+                        f"Stat: {selected_stat1}-{selected_stat2}<br>"
+                        f"Time: %{{customdata[0]|%Y-%m-%d %H:%M:%S}}<br>"
+                        f"Value: %{{y:.2f}}<extra></extra>"
                     )
                 ))
 
             fig.update_layout(
                 title=f"Signal per Bead – from {csv_file_name}",
                 xaxis_title="Compressed Time (Continuous Data Only)",
-                yaxis_title="Signal",
+                yaxis=dict(title="Signal", side="left"),
+                yaxis2=dict(title="Machine Status Value", overlaying="y", side="right"),
                 height=500,
-                legend_title="Bead",
-                hovermode="closest"  # ✅ shows only one tooltip per hover
+                legend_title="Bead / Status",
+                hovermode="closest"
             )
+
             st.plotly_chart(fig, use_container_width=True)
