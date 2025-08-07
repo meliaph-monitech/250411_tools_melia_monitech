@@ -116,6 +116,6 @@ if uploaded_zip:
                 yaxis_title="Signal",
                 height=500,
                 legend_title="Bead",
-                hovermode="x unified"
+                hovermode="closest"  # ✅ shows only one tooltip per hover
             )
             st.plotly_chart(fig, use_container_width=True)
