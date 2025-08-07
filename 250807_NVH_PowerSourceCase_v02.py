@@ -6,7 +6,7 @@ from datetime import datetime
 import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
-st.title("Bead Signal Viewer – One Plot per Uploaded CSV File")
+st.title("Bead Signal Viewer – One Plot per Uploaded CSV File (Compressed Time Gaps)")
 
 uploaded_zip = st.file_uploader("Upload ZIP of CSVs", type="zip")
 
@@ -42,7 +42,7 @@ def process_zip(zip_file):
                 for i in range(1, len(row)):
                     plot_rows.append({
                         "timestamp": timestamp,
-                        "date": timestamp.date(),
+                        "timestamp_str": timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                         "signal": row[i],
                         "bead_number": f"Bead {i:02d}",
                         "csv_name": csv_name,
@@ -67,44 +67,36 @@ if uploaded_zip:
 
             fig = go.Figure()
 
+            x_labels = df_plot["timestamp_str"].unique().tolist()
+
             for bead in df_plot["bead_number"].unique():
-                sub = df_plot[df_plot["bead_number"] == bead].sort_values("timestamp")
-                sub = sub.reset_index(drop=True)
-
-                xs, ys, cds = [], [], []
-                prev_date = None
-                for i, row in sub.iterrows():
-                    current_date = row["date"]
-                    if prev_date is not None and current_date != prev_date:
-                        xs.append(None)
-                        ys.append(None)
-                        cds.append(None)
-                    xs.append(row["timestamp"])
-                    ys.append(row["signal"])
-                    cds.append(row["csv_name"])
-                    prev_date = current_date
-
+                sub = df_plot[df_plot["bead_number"] == bead]
                 fig.add_trace(go.Scatter(
-                    x=xs,
-                    y=ys,
+                    x=sub["timestamp_str"],
+                    y=sub["signal"],
                     mode="lines",
                     name=bead,
                     line=dict(width=1),
-                    customdata=cds,
+                    customdata=sub[["csv_name"]],
                     hovertemplate=(
                         f"Bead: {bead}<br>"
-                        f"Time: %{{x|%Y-%m-%d %H:%M:%S}}<br>"
+                        f"Time: %{{x}}<br>"
                         f"Signal: %{{y:.2f}}<br>"
-                        f"File: %{{customdata}}<extra></extra>"
+                        f"File: %{{customdata[0]}}<extra></extra>"
                     )
                 ))
 
             fig.update_layout(
                 title=f"Signal per Bead – from {csv_file_name}",
-                xaxis_title="Time",
+                xaxis_title="Time (Data Only)",
                 yaxis_title="Signal",
                 height=500,
                 legend_title="Bead",
+                xaxis=dict(
+                    type="category",  # ✅ Discrete X-axis to compress gaps
+                    tickmode="auto",
+                    tickangle=45
+                ),
                 hovermode="x unified"
             )
             st.plotly_chart(fig, use_container_width=True)
