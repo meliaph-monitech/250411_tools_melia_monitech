@@ -13,7 +13,7 @@ st.sidebar.header("Upload Files")
 uploaded_zip = st.sidebar.file_uploader("Upload ZIP of Bead Signal CSVs", type="zip")
 status_csv = st.sidebar.file_uploader("Upload Machine Status CSV", type="csv")
 
-show_bar = st.sidebar.checkbox("Show status as bar plot (instead of line)", value=False)
+# show_bar = st.sidebar.checkbox("Show status as bar plot (instead of line)", value=False)
 
 # --- Helper Function ---
 @st.cache_data
