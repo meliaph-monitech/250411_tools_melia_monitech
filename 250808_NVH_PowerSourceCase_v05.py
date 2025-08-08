@@ -145,7 +145,7 @@ if uploaded_zip:
                         line=dict(width=2, dash="dot", color="rgba(100,100,100,0.2)"),
                         yaxis="y2",
                         hovertemplate="Time: %{x|%Y-%m-%d %H:%M:%S}<br>Status Value: %{y}<extra></extra>",
-                        opacity=0.8
+                        opacity=0.9
                     ))
 
             for bead in df_plot["bead_number"].unique():
