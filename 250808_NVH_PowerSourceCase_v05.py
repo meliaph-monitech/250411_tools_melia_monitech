@@ -89,7 +89,7 @@ def process_zip(zip_file):
 # --- Load and Process Status CSV ---
 def process_status_csv(status_file):
     df_status = pd.read_csv(status_file)
-    df_status["Timestamp"] = pd.to_datetime(df_status["Timestamp"])
+    df_status["Timestamp"] = pd.to_datetime(df_status["Timestamp"]) - pd.to_timedelta("7m7s")
     return df_status
 
 # --- Main Execution ---
