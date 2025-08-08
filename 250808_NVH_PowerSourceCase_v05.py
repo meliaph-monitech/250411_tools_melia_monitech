@@ -13,8 +13,6 @@ st.sidebar.header("Upload Files")
 uploaded_zip = st.sidebar.file_uploader("Upload ZIP of Bead Signal CSVs", type="zip")
 status_csv = st.sidebar.file_uploader("Upload Machine Status CSV", type="csv")
 
-# show_bar = st.sidebar.checkbox("Show status as bar plot (instead of line)", value=False)
-
 # --- Helper Function ---
 @st.cache_data
 def process_zip(zip_file):
@@ -100,10 +98,6 @@ if uploaded_zip:
     if not plots_data:
         st.warning("No valid CSV data found in ZIP.")
     else:
-        # Define the x-axis range based on ZIP times only
-        min_time = min(all_bead_times)
-        max_time = max(all_bead_times)
-
         if status_csv:
             df_status = process_status_csv(status_csv)
             stat1_options = df_status["Stat1"].dropna().unique().tolist()
@@ -119,34 +113,26 @@ if uploaded_zip:
         else:
             df_status_filtered = None
 
+        min_time = min(all_bead_times)
+        max_time = max(all_bead_times)
+
         for csv_file_name, df_plot in plots_data:
             st.subheader(f"📄 Plot from file: {csv_file_name}")
 
             fig = go.Figure()
 
-            # Plot status first (bar or line) with reduced opacity
+            # Plot status line first (send to back)
             if df_status_filtered is not None and not df_status_filtered.empty:
-                if show_bar:
-                    fig.add_trace(go.Bar(
-                        x=df_status_filtered["Timestamp"],
-                        y=df_status_filtered["Value"],
-                        name=f"Status: {selected_stat1}-{selected_stat2}",
-                        marker_color="rgba(100,100,100,0.2)",
-                        yaxis="y2",
-                        opacity=0.8,
-                        hovertemplate="Time: %{x|%Y-%m-%d %H:%M:%S}<br>Status Value: %{y}<extra></extra>",
-                    ))
-                else:
-                    fig.add_trace(go.Scatter(
-                        x=df_status_filtered["Timestamp"],
-                        y=df_status_filtered["Value"],
-                        mode="lines",
-                        name=f"Status: {selected_stat1}-{selected_stat2}",
-                        line=dict(width=2, dash="dot", color="rgba(100,100,100,0.2)"),
-                        yaxis="y2",
-                        hovertemplate="Time: %{x|%Y-%m-%d %H:%M:%S}<br>Status Value: %{y}<extra></extra>",
-                        opacity=0.9
-                    ))
+                fig.add_trace(go.Scatter(
+                    x=df_status_filtered["Timestamp"],
+                    y=df_status_filtered["Value"],
+                    mode="lines",
+                    name=f"Status: {selected_stat1}-{selected_stat2}",
+                    line=dict(width=2, dash="dot", color="rgba(100,100,100,0.2)"),
+                    yaxis="y2",
+                    hovertemplate="Time: %{x|%Y-%m-%d %H:%M:%S}<br>Status Value: %{y}<extra></extra>",
+                    opacity=0.8
+                ))
 
             for bead in df_plot["bead_number"].unique():
                 sub = df_plot[df_plot["bead_number"] == bead]
@@ -168,12 +154,10 @@ if uploaded_zip:
 
             fig.update_layout(
                 title=f"Signal per Bead – from {csv_file_name}",
-                xaxis=dict(
-                    title="Time (ZIP only range)",
-                    range=[min_time, max_time]
-                ),
+                xaxis_title="Time (ZIP only)",
                 yaxis=dict(title="Signal", side="left"),
                 yaxis2=dict(title="Status Value", overlaying="y", side="right"),
+                xaxis=dict(range=[min_time, max_time]),
                 height=500,
                 legend_title="Bead / Status",
                 hovermode="closest"
