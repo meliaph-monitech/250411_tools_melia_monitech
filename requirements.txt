@@ -9,3 +9,7 @@ numpy
 plotly
 scipy
 openpyxl
+pandas
+numpy
+scikit-learn
+openpyxl
