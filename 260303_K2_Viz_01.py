@@ -262,11 +262,30 @@ for idx, key in enumerate(keys, start=1):
         st.error(f"[Group {idx}] Pivot failed: {e}")
         continue
 
-    if len(feat_cols) == 0:
-        st.warning(f"[Group {idx}] No feature columns after pivot. Skipping.")
-        continue
+    # if len(feat_cols) == 0:
+    #     st.warning(f"[Group {idx}] No feature columns after pivot. Skipping.")
+    #     continue
 
-    # Decide feasible PCA components
+    # # Decide feasible PCA components
+    # n_features = len(feat_cols)
+    # n_components = min(requested_components, n_features)
+
+    # -------------------------------------------------
+    # FORCE ALL 4 METRICS TO EXIST (prevents zero rows from disappearing)
+    # -------------------------------------------------
+    EXPECTED_METRICS = ["SUMP_L", "SUMP_U", "MAXP_L", "MAXP_U"]
+    
+    for m in EXPECTED_METRICS:
+        if m not in wide.columns:
+            wide[m] = 0.0  # create missing metric column as 0
+    
+    # Use consistent feature order
+    feat_cols = EXPECTED_METRICS
+    
+    # Fill any remaining NaN with 0
+    wide[feat_cols] = wide[feat_cols].astype(float).fillna(0.0)
+    
+    # Now PCA dimension logic
     n_features = len(feat_cols)
     n_components = min(requested_components, n_features)
 
