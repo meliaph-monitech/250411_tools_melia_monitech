@@ -27,37 +27,42 @@ def read_long_table(uploaded_file) -> pd.DataFrame:
     raise ValueError("Unsupported file type. Please upload .csv or .xlsx/.xls")
 
 def add_metric_parts(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Metrics expected like: SUMP_L, SUMP_U, MAXP_L, MAXP_U
+    """
     out = df.copy()
     parts = out["Metrics"].astype(str).str.split("_", n=1, expand=True)
     out["MetricFamily"] = parts[0]
     out["MetricBound"] = parts[1] if parts.shape[1] > 1 else ""
     return out
 
-def pick_id_cols(include_channel: bool, include_bead: bool, include_metricfamily: bool) -> list[str]:
+def filter_by_bound(df: pd.DataFrame, bound_mode: str) -> pd.DataFrame:
+    """
+    bound_mode: "Both (Upper + Lower)" | "Upper only (_U)" | "Lower only (_L)"
+    """
+    if bound_mode.startswith("Both"):
+        return df
+    if bound_mode.startswith("Upper"):
+        return df[df["MetricBound"].astype(str).str.upper().eq("U")].copy()
+    if bound_mode.startswith("Lower"):
+        return df[df["MetricBound"].astype(str).str.upper().eq("L")].copy()
+    return df
+
+def build_id_cols(per_channel: bool, per_bead: bool) -> list[str]:
     cols = ["Class", "Sub-class", "Stat"]
-    if include_channel:
+    if per_channel:
         cols.append("Channel")
-    if include_bead:
+    if per_bead:
         cols.append("Bead")
-    if include_metricfamily:
-        cols.append("MetricFamily")
     return cols
 
-def filter_metrics(df: pd.DataFrame, metrics_selected: list[str]) -> pd.DataFrame:
-    if not metrics_selected:
-        return df
-    return df[df["Metrics"].isin(metrics_selected)].copy()
-
-def pivot_wide(df: pd.DataFrame, id_cols: list[str], feature_mode: str, agg: str) -> tuple[pd.DataFrame, list[str]]:
+def pivot_wide(df: pd.DataFrame, id_cols: list[str], agg: str) -> tuple[pd.DataFrame, list[str]]:
+    """
+    Use Metrics as feature columns (SUMP_L, SUMP_U, MAXP_L, MAXP_U).
+    We always pivot by Metrics (no user metric selection).
+    """
     tmp = df.copy()
-
-    if feature_mode == "Per Metrics (SUMP_L, SUMP_U, MAXP_L, MAXP_U)":
-        tmp["_feature_"] = tmp["Metrics"].astype(str)
-    elif feature_mode == "Per Metrics Group only (SUMP vs MAXP) [collapse L/U]":
-        tmp["_feature_"] = tmp["MetricFamily"].astype(str)
-    else:
-        # Group + Bound (SUMP__L, ...)
-        tmp["_feature_"] = tmp[["MetricFamily", "MetricBound"]].astype(str).agg("__".join, axis=1)
+    tmp["_feature_"] = tmp["Metrics"].astype(str)
 
     wide = (
         tmp.pivot_table(
@@ -72,135 +77,70 @@ def pivot_wide(df: pd.DataFrame, id_cols: list[str], feature_mode: str, agg: str
     feat_cols = [c for c in wide.columns if c not in id_cols]
     return wide, feat_cols
 
-def fit_pca(wide: pd.DataFrame, id_cols: list[str], feature_cols: list[str], n_components: int, standardize: bool):
-    X = wide[feature_cols].astype(float)
+def fit_pca(wide: pd.DataFrame, id_cols: list[str], feat_cols: list[str], n_components: int, standardize: bool):
+    X = wide[feat_cols].astype(float)
 
+    # drop rows with all-NaN features
     keep = ~X.isna().all(axis=1)
     wide2 = wide.loc[keep].copy()
     X = X.loc[keep].copy()
 
     if X.shape[0] == 0:
         raise ValueError("No rows remain after filtering (all-NaN features).")
+
+    # fill remaining NaNs with column mean
     X = X.apply(lambda s: s.fillna(s.mean()), axis=0)
 
-    if X.shape[1] < n_components:
-        raise ValueError(f"Not enough features ({X.shape[1]}) for PCA({n_components}).")
-
+    # standardize
     X_used = StandardScaler().fit_transform(X.values) if standardize else X.values
+
     pca = PCA(n_components=n_components, random_state=0)
     Z = pca.fit_transform(X_used)
     var = pca.explained_variance_ratio_
 
     out = wide2.copy()
     out["PC1"] = Z[:, 0]
-    out["PC2"] = Z[:, 1]
-    if n_components == 3:
-        out["PC3"] = Z[:, 2]
+    out["PC2"] = Z[:, 1] if n_components >= 2 else 0.0
+    out["PC3"] = Z[:, 2] if n_components >= 3 else 0.0
     return out, var
 
-def aggregate_rowwise(X: pd.DataFrame, agg: str) -> pd.Series:
-    # Row-wise aggregation for "use only aggregate value among chosen metrics"
-    if agg == "mean":
-        return X.mean(axis=1)
-    if agg == "median":
-        return X.median(axis=1)
-    if agg == "min":
-        return X.min(axis=1)
-    if agg == "max":
-        return X.max(axis=1)
-    if agg == "sum":
-        return X.sum(axis=1)
-    raise ValueError("Unsupported row-wise aggregation")
-
-def build_color_map_ui(unique_vals: list[str], default_palette=None):
-    st.write("Assign HEX colors per category (optional). Leave blank to use Plotly defaults.")
-    cmap = {}
-    for v in unique_vals:
-        key = f"color__{v}"
-        default = "" if default_palette is None else default_palette.get(v, "")
-        cmap[v] = st.text_input(f"{v}", value=default, key=key, placeholder="#RRGGBB")
-    # keep only valid-ish hex entries
-    cleaned = {k: v.strip() for k, v in cmap.items() if isinstance(v, str) and v.strip().startswith("#") and len(v.strip()) in (7, 9)}
-    return cleaned
+def is_valid_hex(s: str) -> bool:
+    s = (s or "").strip()
+    if not s.startswith("#"):
+        return False
+    if len(s) not in (7, 9):  # #RRGGBB or #RRGGBBAA
+        return False
+    # basic hex chars check
+    try:
+        int(s[1:], 16)
+        return True
+    except Exception:
+        return False
 
 # =========================
 # UI
 # =========================
-st.title("PCA Explorer (2D/3D) — Plotly (Enhanced)")
-st.caption("Interactive PCA exploration with flexible grouping, feature selection, row-wise aggregation option, custom colors, and adjustable figure height.")
+st.title("PCA Explorer (2D/3D) — Plotly (Focused)")
+st.caption(
+    "Uses all Metrics by default (e.g., SUMP_L/SUMP_U/MAXP_L/MAXP_U). "
+    "You choose point identity (per Channel / per Bead / Channel–Bead) and optionally Upper/Lower only."
+)
 
 with st.sidebar:
     st.header("1) Upload")
     uploaded = st.file_uploader("Upload CSV (or XLSX)", type=["csv", "xlsx", "xls"])
 
-    st.header("2) Plot dimension")
-    dim = st.radio("2D or 3D", ["2D", "3D"], index=1)
-    n_components = 3 if dim == "3D" else 2
-
-    st.header("3) Grouping (what defines a point?)")
-    # (1) Channel
-    channel_mode = st.radio("Channel handling", ["Ignore Channel (plot all together)", "Per Channel"], index=1)
-    include_channel = channel_mode.startswith("Per")
-
-    # (2) Bead
-    bead_mode = st.radio("Bead handling", ["Ignore Bead (plot all together)", "Per Bead"], index=1)
-    include_bead = bead_mode.startswith("Per")
-
-    # (3) Metrics Group (SUMP/MAXP) as point split
-    metricgroup_as_point = st.radio(
-        "Metrics Group handling (as point split)",
-        ["Ignore Metrics Group (plot all together)", "Per Metrics Group (SUMP/MAXP)"],
-        index=0,
-    )
-    include_metricfamily_in_id = metricgroup_as_point.startswith("Per")
-
-    st.header("4) Feature definition (columns used for PCA)")
-    feature_mode = st.selectbox(
-        "Feature columns",
-        [
-            "Per Metrics (SUMP_L, SUMP_U, MAXP_L, MAXP_U)",
-            "Per Metrics Group only (SUMP vs MAXP) [collapse L/U]",
-            "Per Group + Bound (SUMP__L, SUMP__U, MAXP__L, MAXP__U)",
-        ],
-        index=0,
-    )
-
-    st.header("5) Choose metrics (optional filter)")
-    st.caption("If you select metrics, only those metrics are used before pivot / aggregation.")
-    # metrics list shown after file loaded; placeholder for now
-    metrics_selected = None
-
-    st.header("6) Value reduction option")
-    use_mode = st.radio(
-        "Use features for PCA",
-        [
-            "Use all selected features (multivariate PCA)",
-            "Use only ONE aggregate value across selected features (1D -> PCA not needed)",
-        ],
-        index=0,
-    )
-
-    st.header("7) Aggregation")
-    agg = st.selectbox("Aggregate duplicates (pivot)", ["mean", "median", "min", "max", "sum"], index=0)
-
-    st.header("8) Standardize")
-    standardize = st.checkbox("Standardize features", value=True)
-
-    st.header("9) Figure height")
-    fig_height = st.slider("Height (px)", min_value=400, max_value=1400, value=750, step=50)
-
-    st.header("10) Coloring")
-    color_by = st.selectbox("Color points by", ["Stat", "Class", "Channel", "Bead", "MetricFamily"], index=0)
-
-    st.divider()
-    start = st.button("▶ Start Plotting", type="primary", use_container_width=True)
-
 if not uploaded:
     st.info("Upload a file to begin. Expected columns: " + ", ".join(REQUIRED_COLS))
     st.stop()
 
-# Load + validate
-df_long = read_long_table(uploaded)
+# Load early (so sidebar can show unique values for color picker)
+try:
+    df_long = read_long_table(uploaded)
+except Exception as e:
+    st.error(str(e))
+    st.stop()
+
 missing = [c for c in REQUIRED_COLS if c not in df_long.columns]
 if missing:
     st.error(f"Missing required columns: {missing}")
@@ -208,112 +148,136 @@ if missing:
 
 df_long = add_metric_parts(df_long)
 
-# Now that data is loaded, show metrics selection (sidebar needs rerender)
+# ===== Sidebar controls (need df_long loaded) =====
 with st.sidebar:
-    all_metrics = sorted(df_long["Metrics"].astype(str).unique().tolist())
-    metrics_selected = st.multiselect(
-        "Select Metrics to include (empty = all)",
-        options=all_metrics,
-        default=[],
+    st.header("2) PCA Dimension")
+    dim = st.radio("2D or 3D", ["2D", "3D"], index=1)
+    requested_components = 3 if dim == "3D" else 2
+
+    st.header("3) Point identity")
+    per_channel = st.checkbox("Per Channel", value=True)
+    per_bead = st.checkbox("Per Bead", value=True)
+    st.caption("If both checked → points are Channel–Bead pairs. If neither → all together (per Class/Sub-class/Stat).")
+
+    st.header("4) Use Upper/Lower")
+    bound_mode = st.selectbox(
+        "Metrics bound",
+        ["Both (Upper + Lower)", "Upper only (_U)", "Lower only (_L)"],
+        index=0,
     )
 
-# Only run when user clicks
+    st.header("5) Aggregation")
+    agg = st.selectbox("Aggregate duplicates (pivot)", ["mean", "median", "min", "max", "sum"], index=0)
+
+    st.header("6) Standardize")
+    standardize = st.checkbox("Standardize features (recommended)", value=True)
+
+    st.header("7) Color settings")
+    color_by = st.selectbox("Color points by", ["Stat", "Class", "Channel", "Bead"], index=0)
+
+    st.header("8) Figure height")
+    fig_height = st.slider("Height (px)", 400, 1400, 750, 50)
+
+# Build a preview dataframe for color categories (respecting current filters)
+df_preview = filter_by_bound(df_long, bound_mode)
+id_cols_preview = build_id_cols(per_channel=per_channel, per_bead=per_bead)
+
+# If color_by isn't present (e.g., Channel unchecked but user selects Channel), still allow, but will fallback later
+color_vals = []
+if color_by in df_preview.columns:
+    color_vals = sorted(df_preview[color_by].astype(str).unique().tolist())
+
+# Sidebar HEX inputs (BEFORE Start Plotting)
+with st.sidebar:
+    st.subheader("HEX color map (optional)")
+    st.caption("Provide per-category HEX (e.g., #FF0000). Leave blank for Plotly defaults.")
+
+    # Keep inputs stable across reruns
+    if "hex_map" not in st.session_state:
+        st.session_state["hex_map"] = {}
+
+    # Only show inputs if we have categories
+    if color_vals:
+        for v in color_vals:
+            key = f"hex__{color_by}__{v}"
+            default_val = st.session_state["hex_map"].get((color_by, v), "")
+            inp = st.text_input(str(v), value=default_val, key=key, placeholder="#RRGGBB")
+            st.session_state["hex_map"][(color_by, v)] = inp
+    else:
+        st.write("(No categories to map yet)")
+
+    st.divider()
+    start = st.button("▶ Start Plotting", type="primary", use_container_width=True)
+
 if not start:
     st.warning("Set options in the sidebar, then click **Start Plotting**.")
     st.stop()
 
-# Apply metric filtering
-df_use = filter_metrics(df_long, metrics_selected)
+# ===== Build final dataset (respecting filters) =====
+df_use = filter_by_bound(df_long, bound_mode)
+id_cols = build_id_cols(per_channel=per_channel, per_bead=per_bead)
 
-# Build point identity columns
-id_cols = pick_id_cols(include_channel, include_bead, include_metricfamily_in_id)
-
-# Pivot wide
+# Pivot (always Metrics as features)
 try:
-    wide, feat_cols = pivot_wide(df_use, id_cols=id_cols, feature_mode=feature_mode, agg=agg)
+    wide, feat_cols = pivot_wide(df_use, id_cols=id_cols, agg=agg)
 except Exception as e:
     st.error(f"Pivot failed: {e}")
     st.stop()
 
-# If user selects "single aggregate value", collapse features row-wise into 1 numeric column.
-# Then 2D/3D plot is done directly on (value) with a synthetic axis (or jitter) — PCA is not meaningful in 1D.
-# But we can still provide a consistent scatter embedding:
-#   - 2D: x = agg_value, y = 0
-#   - 3D: x = agg_value, y = 0, z = 0
-use_single_value = use_mode.startswith("Use only ONE")
+# Decide feasible PCA dimensionality
+n_features = len(feat_cols)
+if n_features == 0:
+    st.error("No feature columns found after pivot. Check your Metrics column / filters.")
+    st.stop()
 
-if use_single_value:
-    if len(feat_cols) == 0:
-        st.error("No feature columns to aggregate. Check feature mode / metric selection.")
-        st.stop()
+n_components = min(requested_components, n_features)
+if requested_components > n_components:
+    st.warning(
+        f"Requested {requested_components}D PCA but only {n_features} feature(s) available "
+        f"(because of your Upper/Lower selection). Using PCA({n_components}) instead."
+    )
 
-    X = wide[feat_cols].astype(float).apply(lambda s: s.fillna(s.mean()), axis=0)
-    wide2 = wide.copy()
-    wide2["AggValue"] = aggregate_rowwise(X, agg=agg)
+# Fit PCA (or PCA(1) if only 1 feature remains)
+try:
+    pca_df, var = fit_pca(wide, id_cols=id_cols, feat_cols=feat_cols, n_components=max(1, n_components), standardize=standardize)
+except Exception as e:
+    st.error(f"PCA failed: {e}")
+    st.stop()
 
-    # Standardize single value if requested
-    if standardize:
-        v = wide2["AggValue"].values.reshape(-1, 1)
-        wide2["AggValue"] = StandardScaler().fit_transform(v).ravel()
+# Determine color column
+color_col = color_by if color_by in pca_df.columns else "Stat"
+if color_col not in pca_df.columns:
+    # last resort: create a single category
+    pca_df["__all__"] = "ALL"
+    color_col = "__all__"
 
-    plot_df = wide2.copy()
-    plot_df["PC1"] = plot_df["AggValue"]
-    plot_df["PC2"] = 0.0
-    plot_df["PC3"] = 0.0
-    var = np.array([1.0, 0.0, 0.0]) if dim == "3D" else np.array([1.0, 0.0])
-
-    # For clarity, rename title wording
-    mode_label = "Single aggregate value (no PCA)"
-else:
-    # PCA
-    try:
-        plot_df, var = fit_pca(
-            wide=wide,
-            id_cols=id_cols,
-            feature_cols=feat_cols,
-            n_components=n_components,
-            standardize=standardize,
-        )
-    except Exception as e:
-        st.error(f"PCA failed: {e}")
-        st.stop()
-    mode_label = "Multivariate PCA"
-
-# Decide hover
-hover_cols = [c for c in ["Class", "Sub-class", "Stat", "Channel", "Bead", "MetricFamily"] if c in plot_df.columns]
-
-# Build color map UI based on selected color_by
-if color_by not in plot_df.columns:
-    color_by_effective = "Stat"
-else:
-    color_by_effective = color_by
-
-unique_color_vals = sorted(plot_df[color_by_effective].astype(str).unique().tolist())
-
-# Color map inputs (in main area for visibility)
-st.subheader("Color customization (optional)")
-st.caption(f"Coloring by **{color_by_effective}**. Provide HEX per category (e.g., #FF0000). Leave blank to use defaults.")
+# Build color map from sidebar inputs
 color_map = {}
-cols = st.columns(3)
-for i, v in enumerate(unique_color_vals):
-    with cols[i % 3]:
-        color_map[v] = st.text_input(f"{v}", value="", placeholder="#RRGGBB", key=f"hex_{color_by_effective}_{v}")
-color_map = {k: v.strip() for k, v in color_map.items() if v.strip().startswith("#") and len(v.strip()) in (7, 9)}
+for (cb, v), hexv in st.session_state.get("hex_map", {}).items():
+    if cb == color_by and is_valid_hex(hexv):
+        color_map[str(v)] = hexv.strip()
 
-# Layout
-left, right = st.columns([2, 1], gap="large")
+# Hover data
+hover_cols = [c for c in ["Class", "Sub-class", "Stat", "Channel", "Bead"] if c in pca_df.columns]
 
+# ===== Plot =====
 title = (
-    f"{dim} | {mode_label} | point_id={'+'.join(id_cols)} | feature_mode={feature_mode} | "
-    f"pivot_agg={agg} | standardize={standardize} | explained_var={np.round(var, 3)}"
+    f"PCA ({'3D' if requested_components==3 else '2D'}) | "
+    f"point_id={'+'.join(id_cols)} | bound={bound_mode} | agg={agg} | "
+    f"standardize={standardize} | features={feat_cols} | explained_var={np.round(var,3)}"
 )
 
+left, right = st.columns([2, 1], gap="large")
+
 with left:
-    if dim == "3D":
+    # If user asked 3D but PCA has <3 components, we still plot consistently:
+    # - If PCA(2): use 2D scatter
+    # - If PCA(1): use 1D embedded into 2D (PC2=0)
+    if requested_components == 3 and n_components >= 3:
         fig = px.scatter_3d(
-            plot_df,
+            pca_df,
             x="PC1", y="PC2", z="PC3",
-            color=color_by_effective,
+            color=color_col,
             color_discrete_map=color_map if color_map else None,
             hover_data=hover_cols,
             title=title,
@@ -322,10 +286,11 @@ with left:
         fig.update_layout(height=fig_height)
         st.plotly_chart(fig, use_container_width=True)
     else:
+        # 2D view (PC2 might be 0 if only 1 feature/component)
         fig = px.scatter(
-            plot_df,
+            pca_df,
             x="PC1", y="PC2",
-            color=color_by_effective,
+            color=color_col,
             color_discrete_map=color_map if color_map else None,
             hover_data=hover_cols,
             title=title,
@@ -336,23 +301,22 @@ with left:
 
 with right:
     st.subheader("Summary")
-    st.write(f"- Points: **{len(plot_df)}**")
+    st.write(f"- Points: **{len(pca_df)}**")
     st.write(f"- Point identity: **{'+'.join(id_cols)}**")
-    st.write(f"- Feature columns (before reduction): **{len(feat_cols)}**")
-    st.write(f"- Mode: **{mode_label}**")
+    st.write(f"- Feature count: **{len(feat_cols)}**")
+    st.write(f"- Feature names: **{', '.join(map(str, feat_cols))}**")
+    st.write(f"- PCA components used: **{n_components}**")
     st.write(f"- Explained variance: **{np.round(var, 4)}**")
-    st.write("Feature columns:")
-    st.code(", ".join(map(str, feat_cols)) if feat_cols else "(none)")
 
     st.subheader("Download")
-    csv_bytes = plot_df.to_csv(index=False).encode("utf-8")
+    csv_bytes = pca_df.to_csv(index=False).encode("utf-8")
     st.download_button(
-        "Download table as CSV",
+        "Download PCA table as CSV",
         data=csv_bytes,
         file_name="pca_table.csv",
         mime="text/csv",
         use_container_width=True,
     )
 
-    with st.expander("Preview data (first 50 rows)"):
-        st.dataframe(plot_df.head(50), use_container_width=True)
+    with st.expander("Preview (first 50 rows)"):
+        st.dataframe(pca_df.head(50), use_container_width=True)
